@@ -7,6 +7,9 @@ import {
   IconRotate360,
   IconUpload,
   IconMoodCrazyHappy,
+  IconHeart,
+  IconKarate,
+  IconStarFilled,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 
@@ -17,9 +20,12 @@ const FLOOR_BOTTOM = 510;
 const SPEED = 230;
 const SPIN_TIME = 0.85;
 const SPIN_RADIUS = 190;
-const DANCE_TIME = 4.2;
+const DANCE_TIME = 3.2;
+const KICK_TIME = 0.32;
+const WORLD_W = 3840;
+const MAX_HP = 100;
 const COINS_PER_PILE = 25;
-const WOMAN = { x: 165, y: 410 };
+const WOMAN = { x: WORLD_W - 160, y: 410 };
 const TRACK_SRC = "/audio/tiptoe-wing-in-my-jawwdinz.mp3";
 
 type Pile = { x: number; y: number; gold: boolean; seed: number };
@@ -33,22 +39,25 @@ type Particle = {
   kind: "spark" | "coin" | "heart";
 };
 
-const PILE_POSITIONS: [number, number][] = [
-  [330, 385],
-  [480, 360],
-  [640, 400],
-  [800, 372],
-  [300, 480],
-  [570, 485],
-  [735, 492],
-  [885, 450],
-  [440, 435],
-];
+const PILE_POSITIONS: [number, number][] = Array.from({ length: 16 }, (_, i) => [
+  300 + i * 210 + (i % 3) * 30,
+  [385, 470, 360, 440, 495][i % 5],
+]);
 
 const makePiles = (): Pile[] =>
   PILE_POSITIONS.map(([x, y], i) => ({ x, y, gold: false, seed: i + 1 }));
 
-function drawBarn(ctx: CanvasRenderingContext2D, time: number) {
+function drawBarn(ctx: CanvasRenderingContext2D, time: number, cam: number) {
+  const first = Math.floor(cam / W);
+  for (let i = first; i <= first + 1; i++) {
+    ctx.save();
+    ctx.translate(i * W - cam, 0);
+    drawBarnTile(ctx, time);
+    ctx.restore();
+  }
+}
+
+function drawBarnTile(ctx: CanvasRenderingContext2D, time: number) {
   const wall = ctx.createLinearGradient(0, 0, 0, FLOOR_TOP);
   wall.addColorStop(0, "#4a2c1a");
   wall.addColorStop(1, "#6b4128");
@@ -296,15 +305,162 @@ type Hero = {
   moving: boolean;
   danceT: number;
   spinT: number;
+  kickT: number;
+  inv: number;
 };
 
-function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
+type EnemyKind = "goon" | "brute";
+type Enemy = {
+  x: number;
+  y: number;
+  kind: EnemyKind;
+  hp: number;
+  maxHp: number;
+  state: "idle" | "walk" | "wind" | "hurt" | "dead";
+  t: number;
+  face: number;
+  cd: number;
+  frozen: boolean;
+  vx: number;
+  phase: number;
+  spd: number;
+};
+
+function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy) {
+  const brute = e.kind === "brute";
+  const sc = brute ? 1.3 : 1;
+  const vest = brute ? "#5b2a3c" : "#4a3a22";
+  const skin = brute ? "#8a6fa8" : "#7fb04a";
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.beginPath();
+  ctx.ellipse(0, 3, 28 * sc, 8 * sc, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (e.state === "dead") ctx.globalAlpha = Math.max(0, 1 - e.t / 0.6);
+  if (e.frozen) ctx.filter = "saturate(0.25) hue-rotate(150deg) brightness(1.35)";
+  ctx.scale(e.face * sc, sc);
+  if (e.state === "dead") ctx.rotate(-Math.min(1, e.t * 5) * 1.4);
+  if (e.state === "hurt") {
+    ctx.translate(-6, 0);
+    ctx.rotate(-0.15);
+  }
+  const sw = e.state === "walk" ? Math.sin(e.phase) : 0;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#1d1a14";
+  ctx.lineWidth = 9;
+  [-7, 7].forEach((lx, i) => {
+    const off = sw * 8 * (i ? 1 : -1);
+    ctx.beginPath();
+    ctx.moveTo(lx, -32);
+    ctx.lineTo(lx + off, -6);
+    ctx.stroke();
+    ctx.fillStyle = "#0e0d09";
+    ctx.beginPath();
+    ctx.ellipse(lx + off + 4, -4, 10, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  const arm = (side: number, hx: number, hy: number) => {
+    ctx.strokeStyle = vest;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(side * 18, -72);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  arm(-1, -24 + sw * 6, -44);
+  ctx.fillStyle = vest;
+  ctx.beginPath();
+  ctx.moveTo(-20, -76);
+  ctx.lineTo(20, -76);
+  ctx.lineTo(22, -30);
+  ctx.lineTo(-22, -30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#1d1a14";
+  ctx.fillRect(-22, -38, 44, 6);
+  ctx.fillStyle = "#d9b13a";
+  ctx.fillRect(-4, -39, 8, 8);
+  if (e.state === "wind") {
+    const p = Math.min(1, e.t / 0.4);
+    if (p < 0.75) arm(1, 20, -104 + p * 10);
+    else arm(1, 56, -62);
+  } else {
+    arm(1, 24 - sw * 6, -44);
+  }
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.moveTo(-18, -92);
+  ctx.lineTo(-38, -100);
+  ctx.lineTo(-18, -80);
+  ctx.moveTo(18, -92);
+  ctx.lineTo(38, -100);
+  ctx.lineTo(18, -80);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, -88, 20, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = brute ? "#2a2230" : "#b3322b";
+  ctx.beginPath();
+  ctx.arc(0, -92, 21, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(-21, -94, 42, 5);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(-7, -88, 5, 0, Math.PI * 2);
+  ctx.arc(8, -88, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#c01818";
+  ctx.beginPath();
+  ctx.arc(-6, -88, 2.4, 0, Math.PI * 2);
+  ctx.arc(9, -88, 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#1d1a14";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-13, -97);
+  ctx.lineTo(-2, -91);
+  ctx.moveTo(14, -97);
+  ctx.lineTo(3, -91);
+  ctx.stroke();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-9, -77);
+  for (let k = 0; k < 6; k++) ctx.lineTo(-9 + k * 3.6 + 1.8, k % 2 ? -77 : -73);
+  ctx.stroke();
+  if (e.frozen) {
+    ctx.fillStyle = "rgba(170,230,255,0.4)";
+    ctx.strokeStyle = "rgba(220,250,255,0.9)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(-30, -116, 60, 120, 12);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (e.hp < e.maxHp && e.state !== "dead") {
+    const w = 46 * sc;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(e.x - w / 2, e.y - 128 * sc, w, 6);
+    ctx.fillStyle = "#ff5252";
+    ctx.fillRect(e.x - w / 2, e.y - 128 * sc, (w * e.hp) / e.maxHp, 6);
+  }
+}
+
+
+function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
   const dancing = h.danceT > 0;
   const spinning = h.spinT >= 0;
   const elapsed = dancing ? DANCE_TIME - h.danceT : 0;
   const ph = h.phase;
   ctx.save();
   ctx.translate(h.x, h.y);
+  if (h.inv > 0 && !dancing && Math.floor(h.inv * 20) % 2 === 0) ctx.globalAlpha = 0.4;
   ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.beginPath();
   ctx.ellipse(0, 3, 30, 8, 0, 0, Math.PI * 2);
@@ -333,9 +489,13 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
     [-8, stepL],
     [8, stepR],
   ];
-  legs.forEach(([lx, lift]) => {
+  const kickExt = h.kickT >= 0 ? Math.sin((h.kickT / KICK_TIME) * Math.PI) : 0;
+  legs.forEach(([lx0, lift0], idx) => {
+    const kicking = idx === 1 && kickExt > 0;
+    const lx = kicking ? lx0 + 46 * kickExt : lx0;
+    const lift = kicking ? 32 * kickExt : lift0;
     ctx.beginPath();
-    ctx.moveTo(lx, -34);
+    ctx.moveTo(lx0, -34);
     ctx.lineTo(lx, -10 - lift);
     ctx.stroke();
     ctx.fillStyle = "#0d0c1a";
@@ -417,9 +577,9 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
   ctx.save();
   ctx.translate(0, -84);
   ctx.rotate(sway);
-  ctx.fillStyle = "#f3d3c0";
+  ctx.fillStyle = "#ecd3c6";
   ctx.beginPath();
-  ctx.ellipse(0, -30, 28, 33, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -30, 27, 35, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
   ctx.ellipse(-27, -28, 5, 8, 0, 0, Math.PI * 2);
@@ -441,40 +601,97 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
     ctx.quadraticCurveTo(-18 + k * 9, -76 - (k % 2) * 6, -8 + k * 8, -74);
     ctx.stroke();
   }
-  // face
+  // face (pale, wide-eyed, long nose, too-big grin)
+  ctx.fillStyle = "#e4b8a8";
+  ctx.beginPath();
+  ctx.ellipse(-22, -22, 9, 11, 0, 0, Math.PI * 2);
+  ctx.ellipse(22, -22, 9, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(120,70,80,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(-11, -27, 9, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(11, -27, 9, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.beginPath();
-  ctx.ellipse(-10, -34, 6, 5, 0, 0, Math.PI * 2);
-  ctx.ellipse(10, -34, 6, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(-11, -33, 8, 7.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(11, -33, 8, 7.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#2a1a14";
+  const stare = Math.sin(time0 * 1.7) * 1.2;
+  ctx.fillStyle = "#7a5230";
   ctx.beginPath();
-  ctx.arc(-9, -34, 2.6, 0, Math.PI * 2);
-  ctx.arc(11, -34, 2.6, 0, Math.PI * 2);
+  ctx.arc(-10 + stare, -33, 4.4, 0, Math.PI * 2);
+  ctx.arc(12 + stare, -33, 4.4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "#8c6a4f";
+  ctx.fillStyle = "#0a0505";
+  ctx.beginPath();
+  ctx.arc(-10 + stare, -33, 2, 0, Math.PI * 2);
+  ctx.arc(12 + stare, -33, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(-11 + stare, -35, 1, 0, Math.PI * 2);
+  ctx.arc(11 + stare, -35, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#a07868";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.ellipse(-11, -33, 8, 7.5, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(11, -33, 8, 7.5, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+  ctx.strokeStyle = "#a98860";
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(-20, -43);
+  ctx.quadraticCurveTo(-12, -51, -3, -44);
+  ctx.moveTo(20, -42);
+  ctx.quadraticCurveTo(12, -52, 3, -43);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(140,100,90,0.5)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-14, -56);
+  ctx.quadraticCurveTo(0, -60, 14, -56);
+  ctx.moveTo(-10, -52);
+  ctx.quadraticCurveTo(0, -55, 10, -52);
+  ctx.stroke();
+  ctx.strokeStyle = "#a07868";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(-17, -43);
-  ctx.lineTo(-5, -41);
-  ctx.moveTo(17, -43);
-  ctx.lineTo(5, -40);
+  ctx.moveTo(-1, -35);
+  ctx.quadraticCurveTo(-5, -22, -4, -19);
+  ctx.quadraticCurveTo(0, -16, 4, -19);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, -32);
-  ctx.lineTo(-3, -22);
-  ctx.lineTo(2, -21);
-  ctx.stroke();
-  ctx.strokeStyle = "#b34a4a";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
   if (shh) {
-    ctx.moveTo(-5, -12);
-    ctx.lineTo(7, -13);
+    ctx.fillStyle = "#c4616a";
+    ctx.beginPath();
+    ctx.ellipse(1, -10, 8, 2.6, -0.12, 0, Math.PI * 2);
+    ctx.fill();
   } else {
-    ctx.arc(1, -17, 10, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.fillStyle = "#4a1018";
+    ctx.beginPath();
+    ctx.moveTo(-14, -15);
+    ctx.quadraticCurveTo(0, -3, 16, -19);
+    ctx.quadraticCurveTo(2, -13, -14, -15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#f4ecd8";
+    ctx.beginPath();
+    ctx.moveTo(-12, -14.5);
+    ctx.quadraticCurveTo(0, -9, 14, -17.5);
+    ctx.lineTo(13, -15.5);
+    ctx.quadraticCurveTo(0, -8, -11, -12.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#c4616a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-15, -15.5);
+    ctx.quadraticCurveTo(0, -2, 17, -20);
+    ctx.stroke();
   }
-  ctx.stroke();
   ctx.restore();
 
   // bow tie
@@ -496,15 +713,42 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
   ctx.restore();
 }
 
+
+const makeEnemies = (): Enemy[] =>
+  Array.from({ length: 11 }, (_, i) => {
+    const brute = i % 4 === 3;
+    return {
+      x: 950 + i * 240 + (i % 2) * 40,
+      y: [400, 470, 360, 500, 430][i % 5],
+      kind: brute ? "brute" : "goon",
+      hp: brute ? 6 : 3,
+      maxHp: brute ? 6 : 3,
+      state: "idle",
+      t: 0,
+      face: -1,
+      cd: 0.6 + (i % 3) * 0.3,
+      frozen: false,
+      vx: 0,
+      phase: i,
+      spd: brute ? 70 : 100 + (i % 3) * 12,
+    } as Enemy;
+  });
+
+type Status = "playing" | "won" | "lost";
+
 export function RumpelGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const actionsRef = useRef<{ spin: () => void; dance: () => void; reset: () => void }>({
+  const actionsRef = useRef({
     spin: () => {},
     dance: () => {},
-    reset: () => {},
+    kick: () => {},
+    restart: () => {},
   });
   const [coins, setCoins] = useState(0);
+  const [hp, setHp] = useState(MAX_HP);
+  const [charges, setCharges] = useState(2);
+  const [status, setStatus] = useState<Status>("playing");
   const [musicOn, setMusicOn] = useState(false);
   const [trackMissing, setTrackMissing] = useState(false);
   const [trackSrc, setTrackSrc] = useState(TRACK_SRC);
@@ -538,16 +782,38 @@ export function RumpelGame() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     const keys = new Set<string>();
-    const hero: Hero = { x: 480, y: 440, face: 1, phase: 0, moving: false, danceT: 0, spinT: -1 };
+    const hero: Hero = {
+      x: 120,
+      y: 440,
+      face: 1,
+      phase: 0,
+      moving: false,
+      danceT: 0,
+      spinT: -1,
+      kickT: -1,
+      inv: 0,
+    };
     let piles = makePiles();
+    let enemies = makeEnemies();
     let particles: Particle[] = [];
+    let cam = 0;
+    let hpNow = MAX_HP;
+    let chargesNow = 2;
+    let state: Status = "playing";
     let converted = false;
+    let kickHit = true;
     let happy = false;
     let last = performance.now();
     let raf = 0;
 
-    const burst = (x: number, y: number) => {
-      for (let k = 0; k < 18; k++) {
+    const sync = () => {
+      setHp(Math.max(0, Math.round(hpNow)));
+      setCharges(chargesNow);
+      setStatus(state);
+    };
+
+    const burst = (x: number, y: number, n = 18, kind?: "coin" | "spark") => {
+      for (let k = 0; k < n; k++) {
         const a = Math.random() * Math.PI * 2;
         const s = 60 + Math.random() * 160;
         particles.push({
@@ -557,27 +823,65 @@ export function RumpelGame() {
           vy: Math.sin(a) * s - 90,
           life: 0,
           max: 0.7 + Math.random() * 0.5,
-          kind: k % 4 === 0 ? "coin" : "spark",
+          kind: kind ?? (k % 4 === 0 ? "coin" : "spark"),
         });
       }
     };
 
+    const damageEnemy = (e: Enemy, dmg: number, dir: number) => {
+      e.hp -= dmg;
+      e.vx = dir * 280;
+      e.t = 0;
+      e.state = e.hp <= 0 ? "dead" : "hurt";
+      burst(e.x, e.y - 40, 6, "spark");
+    };
+
+    const live = (e: Enemy) => e.state !== "idle" && e.state !== "dead";
+    const onScreen = (e: Enemy) => e.x > cam - 40 && e.x < cam + W + 40;
+
     const spin = () => {
-      if (hero.spinT >= 0) return;
+      if (state !== "playing" || hero.spinT >= 0 || hero.danceT > 0) return;
       hero.spinT = 0;
-      hero.danceT = 0;
       converted = false;
     };
-    const dance = () => {
-      if (hero.spinT >= 0 || hero.danceT > 0) return;
-      hero.danceT = DANCE_TIME;
+    const kick = () => {
+      if (state !== "playing" || hero.kickT >= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
+      hero.kickT = 0;
+      kickHit = false;
     };
-    const reset = () => {
+    const dance = () => {
+      if (state !== "playing" || chargesNow <= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
+      chargesNow--;
+      hero.danceT = DANCE_TIME;
+      hero.inv = DANCE_TIME + 0.3;
+      hero.kickT = -1;
+      enemies.forEach((e) => {
+        if (live(e) && onScreen(e)) e.frozen = true;
+      });
+      sync();
+    };
+    const restart = () => {
       piles = makePiles();
+      enemies = makeEnemies();
+      particles = [];
+      Object.assign(hero, {
+        x: 120,
+        y: 440,
+        face: 1,
+        danceT: 0,
+        spinT: -1,
+        kickT: -1,
+        inv: 0,
+      });
+      cam = 0;
+      hpNow = MAX_HP;
+      chargesNow = 2;
+      state = "playing";
       happy = false;
       setCoins(0);
+      sync();
     };
-    actionsRef.current = { spin, dance, reset };
+    actionsRef.current = { spin, dance, kick, restart };
 
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -589,6 +893,8 @@ export function RumpelGame() {
         if (!e.repeat) spin();
       } else if (k === "e") {
         if (!e.repeat) dance();
+      } else if (k === "k" || k === "j") {
+        if (!e.repeat) kick();
       } else {
         keys.add(k);
       }
@@ -604,22 +910,26 @@ export function RumpelGame() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const time = now / 1000;
+      const playing = state === "playing";
+      const dancing = hero.danceT > 0;
 
       let dx = 0;
       let dy = 0;
-      if (keys.has("arrowleft") || keys.has("a")) dx -= 1;
-      if (keys.has("arrowright") || keys.has("d")) dx += 1;
-      if (keys.has("arrowup") || keys.has("w")) dy -= 1;
-      if (keys.has("arrowdown") || keys.has("s")) dy += 1;
+      if (playing && !dancing) {
+        if (keys.has("arrowleft") || keys.has("a")) dx -= 1;
+        if (keys.has("arrowright") || keys.has("d")) dx += 1;
+        if (keys.has("arrowup") || keys.has("w")) dy -= 1;
+        if (keys.has("arrowdown") || keys.has("s")) dy += 1;
+      }
       hero.moving = dx !== 0 || dy !== 0;
       if (hero.moving) {
         const len = Math.hypot(dx, dy);
-        hero.x += (dx / len) * SPEED * dt;
-        hero.y += (dy / len) * SPEED * 0.7 * dt;
+        const sp = hero.kickT >= 0 ? SPEED * 0.6 : SPEED;
+        hero.x += (dx / len) * sp * dt;
+        hero.y += (dy / len) * sp * 0.7 * dt;
         if (dx !== 0) hero.face = dx > 0 ? 1 : -1;
-        if (hero.danceT > 0) hero.danceT = 0;
       }
-      hero.x = Math.max(40, Math.min(W - 40, hero.x));
+      hero.x = Math.max(cam + 40, Math.min(Math.min(cam + W - 40, WORLD_W - 40), hero.x));
       hero.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, hero.y));
       const wdx = hero.x - WOMAN.x;
       const wdy = (hero.y - WOMAN.y) * 1.6;
@@ -628,9 +938,37 @@ export function RumpelGame() {
         hero.x = WOMAN.x + (wdx / (wd || 1)) * 75;
         hero.y = WOMAN.y + (wdy / (wd || 1) / 1.6) * 75;
       }
+      if (hero.inv > 0) hero.inv = Math.max(0, hero.inv - dt);
 
-      hero.phase += dt * (hero.danceT > 0 ? 13 : hero.moving ? 15 : 0);
-      if (hero.danceT > 0) hero.danceT = Math.max(0, hero.danceT - dt);
+      hero.phase += dt * (dancing ? 13 : hero.moving ? 15 : 0);
+      if (dancing) {
+        hero.danceT = Math.max(0, hero.danceT - dt);
+        if (hero.danceT === 0) {
+          enemies.forEach((e) => {
+            if (e.frozen && e.state !== "dead") {
+              e.frozen = false;
+              e.hp = 0;
+              e.state = "dead";
+              e.t = 0;
+              e.vx = 0;
+              burst(e.x, e.y - 40, 16);
+            }
+          });
+        }
+      }
+
+      if (hero.kickT >= 0) {
+        hero.kickT += dt;
+        if (!kickHit && hero.kickT > 0.12) {
+          kickHit = true;
+          enemies.forEach((e) => {
+            if (!live(e)) return;
+            const fx = (e.x - hero.x) * hero.face;
+            if (fx > -10 && fx < 100 && Math.abs(e.y - hero.y) < 30) damageEnemy(e, 1, hero.face);
+          });
+        }
+        if (hero.kickT >= KICK_TIME) hero.kickT = -1;
+      }
 
       if (hero.spinT >= 0) {
         hero.spinT += dt;
@@ -645,6 +983,12 @@ export function RumpelGame() {
               burst(p.x, p.y);
             }
           });
+          enemies.forEach((e) => {
+            if (!live(e)) return;
+            if (Math.hypot(e.x - hero.x, (e.y - hero.y) * 1.6) < 120) {
+              damageEnemy(e, 2, e.x >= hero.x ? 1 : -1);
+            }
+          });
           if (n > 0) {
             happy = true;
             particles.push({ x: WOMAN.x, y: WOMAN.y - 140, vx: 0, vy: -50, life: 0, max: 1.4, kind: "heart" });
@@ -654,6 +998,82 @@ export function RumpelGame() {
         if (hero.spinT >= SPIN_TIME) hero.spinT = -1;
       }
 
+      // enemies
+      enemies.forEach((e) => {
+        if (e.state === "idle") {
+          if (e.x < cam + W + 60) e.state = "walk";
+          return;
+        }
+        if (e.frozen) return;
+        if (e.state === "dead") {
+          e.t += dt;
+          e.x += e.vx * dt;
+          e.vx *= 0.92;
+          return;
+        }
+        e.cd -= dt;
+        if (e.state === "hurt") {
+          e.t += dt;
+          e.x += e.vx * dt;
+          e.vx *= 0.9;
+          if (e.t > 0.35) e.state = "walk";
+          return;
+        }
+        const ex = hero.x - e.x;
+        const ey = hero.y - e.y;
+        e.face = ex >= 0 ? 1 : -1;
+        if (e.state === "walk") {
+          if (!playing) return;
+          if (Math.abs(ex) > 58) e.x += Math.sign(ex) * e.spd * dt;
+          if (Math.abs(ey) > 6) e.y += Math.sign(ey) * e.spd * 0.7 * dt;
+          e.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, e.y));
+          e.phase += dt * 10;
+          if (Math.abs(ex) <= 66 && Math.abs(ey) <= 18 && e.cd <= 0) {
+            e.state = "wind";
+            e.t = 0;
+          }
+        } else if (e.state === "wind") {
+          e.t += dt;
+          if (e.t > 0.4) {
+            const reach = e.kind === "brute" ? 90 : 76;
+            if (playing && hero.inv <= 0 && Math.abs(ex) < reach && Math.abs(ey) < 26) {
+              hpNow -= e.kind === "brute" ? 16 : 8;
+              hero.inv = 0.9;
+              hero.x += e.face * 24;
+              burst(hero.x, hero.y - 60, 8, "spark");
+              if (hpNow <= 0) {
+                hpNow = 0;
+                state = "lost";
+              }
+              sync();
+            }
+            e.cd = 1.3;
+            e.state = "walk";
+          }
+        }
+      });
+      enemies = enemies.filter((e) => !(e.state === "dead" && e.t > 0.6));
+
+      if (state === "playing" && hero.x > WOMAN.x - 120) {
+        state = "won";
+        happy = true;
+        for (let k = 0; k < 8; k++) {
+          particles.push({
+            x: WOMAN.x - 60 + k * 18,
+            y: WOMAN.y - 120,
+            vx: (k - 4) * 10,
+            vy: -60 - (k % 3) * 20,
+            life: 0,
+            max: 1.8,
+            kind: "heart",
+          });
+        }
+        sync();
+      }
+
+      const target = Math.min(WORLD_W - W, Math.max(0, hero.x - 380));
+      if (target > cam) cam += (target - cam) * Math.min(1, dt * 6);
+
       particles.forEach((p) => {
         p.life += dt;
         p.x += p.vx * dt;
@@ -662,12 +1082,15 @@ export function RumpelGame() {
       });
       particles = particles.filter((p) => p.life < p.max);
 
-      drawBarn(ctx, time);
+      drawBarn(ctx, time, cam);
+      ctx.save();
+      ctx.translate(-cam, 0);
       type Item = { y: number; draw: () => void };
       const items: Item[] = [
         ...piles.map((p) => ({ y: p.y, draw: () => drawPile(ctx, p, time) })),
+        ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e) })),
         { y: WOMAN.y, draw: () => drawWoman(ctx, happy, time) },
-        { y: hero.y, draw: () => drawHero(ctx, hero) },
+        { y: hero.y, draw: () => drawHero(ctx, hero, time) },
       ];
       items.sort((a, b) => a.y - b.y).forEach((i) => i.draw());
 
@@ -698,6 +1121,30 @@ export function RumpelGame() {
           ctx.fill();
         }
       });
+      ctx.restore();
+
+      if (hero.danceT > 0) {
+        ctx.fillStyle = "rgba(90,170,255,0.22)";
+        ctx.fillRect(0, 0, W, H);
+        ctx.font = "900 44px sans-serif";
+        ctx.textAlign = "center";
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = "#1c2a6b";
+        ctx.fillStyle = "#fff";
+        ctx.strokeText("TIP TOE SPECIAL!", W / 2, 90);
+        ctx.fillText("TIP TOE SPECIAL!", W / 2, 90);
+      }
+
+      const threats = enemies.some((e) => live(e) && onScreen(e)) || enemies.some((e) => e.state === "idle" && e.x < cam + W);
+      if (state === "playing" && !threats && cam < WORLD_W - W - 5 && Math.floor(time * 2) % 2 === 0) {
+        ctx.font = "900 46px sans-serif";
+        ctx.textAlign = "right";
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = "#5a2a10";
+        ctx.fillStyle = "#ffd23f";
+        ctx.strokeText("GO \u2192", W - 30, 120);
+        ctx.fillText("GO \u2192", W - 30, 120);
+      }
 
       raf = requestAnimationFrame(frame);
     };
@@ -721,43 +1168,80 @@ export function RumpelGame() {
     setTimeout(startMusic, 50);
   };
 
+  const press = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur();
+    startMusic();
+    fn();
+  };
+
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-lg font-extrabold text-primary-foreground shadow-md">
-          <IconCoin className="size-6" stroke={2.5} />
-          <span>{coins} gold</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-lg font-extrabold text-primary-foreground shadow-md">
+            <IconCoin className="size-6" stroke={2.5} />
+            <span>{coins}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-card px-3 py-2 shadow-md">
+            <IconHeart className="size-5 text-secondary" stroke={2.5} />
+            <div className="h-3.5 w-32 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-secondary transition-all" style={{ width: `${hp}%` }} />
+            </div>
+          </div>
+          <div className="flex items-center gap-1 rounded-full bg-card px-3 py-2 shadow-md" title="Tiptoe specials left">
+            {[0, 1].map((i) => (
+              <IconStarFilled key={i} className={i < charges ? "size-5 text-primary" : "size-5 text-muted-foreground/30"} />
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="lg" className="rounded-full font-bold" onClick={() => { startMusic(); actionsRef.current.spin(); }}>
-            <IconRotate360 className="size-5" /> Spin: hay to gold
+          <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.kick())}>
+            <IconKarate className="size-5" /> Kick
+          </Button>
+          <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.spin())}>
+            <IconRotate360 className="size-5" /> Spin
           </Button>
           <Button
             size="lg"
             variant="secondary"
             className="rounded-full font-bold"
-            onClick={() => { startMusic(); actionsRef.current.dance(); }}
+            disabled={charges <= 0}
+            onClick={press(() => actionsRef.current.dance())}
           >
-            <IconMoodCrazyHappy className="size-5" /> Tiptoe dance
+            <IconMoodCrazyHappy className="size-5" /> Tiptoe special ({charges})
           </Button>
-          <Button size="lg" variant="outline" className="rounded-full font-bold" onClick={() => actionsRef.current.reset()}>
-            <IconRefresh className="size-5" /> Refill hay
+          <Button size="icon" variant="outline" className="rounded-full" onClick={press(() => actionsRef.current.restart())} aria-label="Restart">
+            <IconRefresh className="size-5" />
           </Button>
-          <Button size="icon" variant="outline" className="rounded-full" onClick={toggleMusic} aria-label="Toggle music">
+          <Button size="icon" variant="outline" className="rounded-full" onClick={press(toggleMusic)} aria-label="Toggle music">
             {musicOn ? <IconMusic className="size-5" /> : <IconMusicOff className="size-5" />}
           </Button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
+      <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
+        {status !== "playing" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 text-center">
+            <h2 className="text-4xl font-black text-white drop-shadow sm:text-5xl">
+              {status === "won" ? "She kisses him. Prince!" : "Knocked out!"}
+            </h2>
+            <p className="text-lg text-white/90">
+              {status === "won" ? `You reached her with ${coins} gold.` : "Those goblins play rough."}
+            </p>
+            <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.restart())}>
+              {status === "won" ? "Play again" : "Try again"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <p>
           <b className="text-foreground">Move:</b> Arrows / WASD &nbsp;·&nbsp;
+          <b className="text-foreground">Kick:</b> K &nbsp;·&nbsp;
           <b className="text-foreground">Spin:</b> Space &nbsp;·&nbsp;
-          <b className="text-foreground">Dance:</b> E
+          <b className="text-foreground">Special (2 uses):</b> E
         </p>
         {trackMissing && (
           <label className="flex cursor-pointer items-center gap-2 rounded-full bg-accent px-3 py-1.5 font-medium text-accent-foreground">
