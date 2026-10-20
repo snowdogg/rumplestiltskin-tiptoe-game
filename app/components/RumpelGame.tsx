@@ -3592,13 +3592,6 @@ export function RumpelGame() {
               burst(p.x, p.y);
             }
           });
-          enemies.forEach((e) => {
-            if (!live(e)) return;
-            if (Math.hypot(e.x - hero.x, (e.y - hero.y) * 1.6) < 120) {
-              damageEnemy(e, 2, e.x >= hero.x ? 1 : -1);
-            }
-          });
-          if (boss && Math.hypot(boss.x - hero.x, (boss.y - hero.y) * 1.6) < 190) hitBoss(2);
           if (n > 0) {
             happy = true;
             particles.push({ x: WOMAN.x, y: WOMAN.y - 140, vx: 0, vy: -50, life: 0, max: 1.4, kind: "heart" });
