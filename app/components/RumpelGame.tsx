@@ -436,9 +436,10 @@ type Hero = {
   inv: number;
   armed: boolean;
   fireT: number;
+  deadT: number;
 };
 
-type EnemyKind = "goon" | "brute" | "rat" | "bat" | "zombie" | "skeleton";
+type EnemyKind = "goon" | "brute" | "rat" | "bat" | "zombie" | "skeleton" | "snowman" | "elf" | "gingerbread";
 type Enemy = {
   x: number;
   y: number;
@@ -543,6 +544,9 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
   if (e.kind === "zombie") return drawZombie(ctx, e, time);
   if (e.kind === "skeleton") return drawSkeleton(ctx, e, time);
   if (e.kind === "bat") return drawBat(ctx, e, time);
+  if (e.kind === "snowman") return drawSnowman(ctx, e, time);
+  if (e.kind === "elf") return drawElf(ctx, e, time);
+  if (e.kind === "gingerbread") return drawGingerbread(ctx, e, time);
   if (e.kind === "rat") {
     drawRat(ctx, e, time);
     return;
@@ -847,6 +851,15 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
   ctx.ellipse(0, 3, 30, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  if (h.deadT >= 0) {
+    const t = h.deadT;
+    let ang = Math.PI / 2;
+    if (t < 0.45) ang = 0.5 * (t / 0.45) ** 2;
+    else if (t < 0.9) ang = 0.5 + (Math.PI / 2 - 0.5) * ((t - 0.45) / 0.45) ** 2;
+    else if (t < 1.05) ang = Math.PI / 2 - 0.12 * Math.sin(((t - 0.9) / 0.15) * Math.PI);
+    ctx.translate(-h.face * Math.min(t, 0.9) * 55, -(t < 0.45 ? Math.sin((t / 0.45) * Math.PI) * 22 : 0));
+    ctx.rotate(-h.face * ang);
+  }
   let sx = h.face;
   let hop = 0;
   if (spinning) {
@@ -892,7 +905,8 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
 
   // head sway
   const sway = dancing ? Math.sin(ph * 0.5) * 0.18 : 0;
-  const armSwing = dancing ? Math.sin(ph) : active ? Math.sin(ph) * 0.4 : 0;
+  const armSwing =
+    h.deadT >= 0 ? (h.deadT < 0.5 ? Math.sin(h.deadT * 30) : 0.2) : dancing ? Math.sin(ph) : active ? Math.sin(ph) * 0.4 : 0;
   const shh = dancing && elapsed < 1.1;
 
   // back arm
@@ -1073,6 +1087,23 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
     ctx.quadraticCurveTo(0, -2, 17, -20);
     ctx.stroke();
   }
+  if (h.deadT >= 0.45) {
+    ctx.fillStyle = "#ecd3c6";
+    ctx.beginPath();
+    ctx.ellipse(-11, -33, 8.5, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(11, -33, 8.5, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#2a1a14";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    [-11, 11].forEach((ex) => {
+      ctx.moveTo(ex - 5, -38);
+      ctx.lineTo(ex + 5, -28);
+      ctx.moveTo(ex + 5, -38);
+      ctx.lineTo(ex - 5, -28);
+    });
+    ctx.stroke();
+  }
   ctx.restore();
 
   // bow tie
@@ -1127,10 +1158,10 @@ type Boss = {
   ty: number;
   air: number;
   fired: boolean;
-  kind: "cat" | "frank";
+  kind: "cat" | "frank" | "santa";
   mode: number;
 };
-type Strike = { x: number; y: number; t: number; hit: boolean };
+type Strike = { x: number; y: number; t: number; hit: boolean; gift?: boolean };
 type Shot = { x: number; y: number; vx: number; kind: "orb" | "wave"; life: number };
 
 const BOSS_MIN_X = 2960;
@@ -1138,12 +1169,12 @@ const BOSS_MAX_X = 3400;
 const GATE_X = WOMAN.x - 250;
 
 const makeBoss = (level = 2): Boss => ({
-  kind: level === 2 ? "cat" : "frank",
+  kind: level === 2 ? "cat" : level === 3 ? "frank" : "santa",
   mode: 0,
   x: 3320,
   y: 430,
-  hp: level === 2 ? 40 : 50,
-  maxHp: level === 2 ? 40 : 50,
+  hp: level === 2 ? 40 : level === 3 ? 50 : 60,
+  maxHp: level === 2 ? 40 : level === 3 ? 50 : 60,
   state: "dormant",
   t: 0,
   face: -1,
@@ -1630,7 +1661,7 @@ function enemyFrame(ctx: CanvasRenderingContext2D, e: Enemy, shadowW: number, bo
 }
 
 function armAngle(e: Enemy, sw: number, back: boolean) {
-  if (e.state === "wind") return e.t / (e.kind === "zombie" ? 0.55 : 0.3) < 0.7 ? -1.25 : 1.0;
+  if (e.state === "wind") return e.t / (e.kind === "zombie" || e.kind === "snowman" ? 0.55 : 0.3) < 0.7 ? -1.25 : 1.0;
   return -0.1 + sw * 0.14 * (back ? 1 : -1);
 }
 
@@ -2115,11 +2146,681 @@ const makeThugs = (level = 1): Enemy[] =>
     } as Enemy;
   });
 
-const tiny = (e: Enemy) => e.kind === "rat" || e.kind === "bat";
-const dmgOf = (e: Enemy) => ({ goon: 8, brute: 16, rat: 4, bat: 5, zombie: 11, skeleton: 7 })[e.kind];
-const windupOf = (e: Enemy) => ({ goon: 0.4, brute: 0.4, rat: 0.22, bat: 0.22, zombie: 0.55, skeleton: 0.3 })[e.kind];
-const reachOf = (e: Enemy) => ({ goon: 76, brute: 90, rat: 46, bat: 46, zombie: 82, skeleton: 76 })[e.kind];
-const cdOf = (e: Enemy) => (tiny(e) ? 0.8 : e.kind === "zombie" ? 1.6 : 1.3);
+function drawChristmas(ctx: CanvasRenderingContext2D, time: number, cam: number) {
+  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_TOP + 20);
+  sky.addColorStop(0, "#070e2b");
+  sky.addColorStop(1, "#27407a");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, FLOOR_TOP + 20);
+  for (let k = 0; k < 46; k++) {
+    ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.6 * Math.abs(Math.sin(time * 1.5 + k))})`;
+    ctx.fillRect((k * 211) % W, (k * 97) % 200, 2, 2);
+  }
+  ctx.lineCap = "round";
+  [0, 1, 2].forEach((b) => {
+    ctx.strokeStyle = `rgba(${b === 1 ? "140,120,255" : "80,255,180"},0.09)`;
+    ctx.lineWidth = 46;
+    ctx.beginPath();
+    for (let x = -40; x <= W + 40; x += 40) {
+      const y = 70 + b * 38 + Math.sin(x * 0.012 + time * 0.4 + b) * 26;
+      if (x === -40) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  });
+  const m0 = Math.floor((cam * 0.15) / 420) - 1;
+  for (let i = m0; i < m0 + 4; i++) {
+    const x = i * 420 - cam * 0.15;
+    const peak = 140 + (Math.abs(i * 37) % 50);
+    ctx.fillStyle = "#2c4478";
+    ctx.beginPath();
+    ctx.moveTo(x, FLOOR_TOP + 25);
+    ctx.lineTo(x + 210, peak);
+    ctx.lineTo(x + 420, FLOOR_TOP + 25);
+    ctx.fill();
+    ctx.fillStyle = "#e8f0ff";
+    ctx.beginPath();
+    ctx.moveTo(x + 210, peak);
+    ctx.lineTo(x + 170, peak + 55);
+    ctx.lineTo(x + 250, peak + 55);
+    ctx.fill();
+  }
+  const t0 = Math.floor((cam * 0.5) / 150) - 1;
+  for (let i = t0; i < t0 + 9; i++) {
+    const x = i * 150 + (Math.abs(i * 53) % 40) - cam * 0.5;
+    const h = 150 + (Math.abs(i * 29) % 60);
+    ctx.fillStyle = "#4a2f1a";
+    ctx.fillRect(x - 6, FLOOR_TOP + 10, 12, 18);
+    for (let t = 0; t < 3; t++) {
+      const ty = FLOOR_TOP + 14 - h + t * (h / 3.2);
+      const half = 26 + t * 18;
+      ctx.fillStyle = "#0f4a35";
+      ctx.beginPath();
+      ctx.moveTo(x, ty - 20);
+      ctx.lineTo(x - half, ty + 52);
+      ctx.lineTo(x + half, ty + 52);
+      ctx.fill();
+      ctx.fillStyle = "#eef4ff";
+      ctx.beginPath();
+      ctx.moveTo(x, ty - 20);
+      ctx.lineTo(x - half * 0.55, ty + 14);
+      ctx.lineTo(x - half * 0.2, ty + 8);
+      ctx.lineTo(x + half * 0.2, ty + 16);
+      ctx.lineTo(x + half * 0.55, ty + 12);
+      ctx.fill();
+      const cols = ["#ff4d4d", "#ffd23f", "#4da6ff", "#5dff8a"];
+      for (let b = 0; b < 3; b++) {
+        ctx.fillStyle = cols[(i + t + b) % 4];
+        ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(time * 3 + i + t + b));
+        ctx.beginPath();
+        ctx.arc(x - half * 0.45 + b * half * 0.45, ty + 38 - (b % 2) * 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  const cane = (x: number, top: number, bottom: number, r: number, w: number) => {
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(x, bottom);
+    ctx.lineTo(x, top);
+    ctx.arc(x + r, top, r, Math.PI, 0);
+    ctx.lineTo(x + 2 * r, top + 24);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = w;
+    ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.strokeStyle = "#e0262c";
+    ctx.setLineDash([w * 0.9, w * 0.9]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  const c0 = Math.floor((cam * 0.7) / 440) - 1;
+  for (let i = c0; i < c0 + 4; i++) {
+    cane(i * 440 + 120 - cam * 0.7, 120, FLOOR_TOP + 26, 34, 18);
+  }
+  const ground = ctx.createLinearGradient(0, FLOOR_TOP + 20, 0, H);
+  ground.addColorStop(0, "#d6e3fa");
+  ground.addColorStop(1, "#8aa3d2");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, FLOOR_TOP + 20, W, H);
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  const d0 = Math.floor(cam / 170) - 1;
+  for (let k = d0; k < d0 + 8; k++) {
+    const x = k * 170 + 40 - cam;
+    const y = FLOOR_TOP + 60 + (Math.abs(k * 71) % 130);
+    ctx.beginPath();
+    ctx.ellipse(x, y, 70, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const g0 = Math.floor(cam / 300) - 1;
+  for (let k = g0; k < g0 + 5; k++) {
+    const x = k * 300 + 90 + (Math.abs(k * 41) % 60) - cam;
+    const y = FLOOR_TOP + 30;
+    if (k % 2) {
+      cane(x, y - 70, y, 15, 9);
+    } else {
+      ctx.fillStyle = ["#e0262c", "#2a9d4a", "#3b6fe0"][Math.abs(k) % 3];
+      ctx.fillRect(x - 20, y - 36, 40, 36);
+      ctx.fillStyle = "#ffe46b";
+      ctx.fillRect(x - 4, y - 36, 8, 36);
+      ctx.fillRect(x - 20, y - 22, 40, 7);
+      ctx.beginPath();
+      ctx.ellipse(x - 8, y - 42, 9, 6, -0.4, 0, Math.PI * 2);
+      ctx.ellipse(x + 8, y - 42, 9, 6, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  for (let k = 0; k < 24; k++) {
+    const sx = (((k * 83 - cam) % W) + W) % W;
+    ctx.fillRect(sx, FLOOR_TOP + 40 + ((k * 61) % 150), 2, 2);
+  }
+  const vig = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 640);
+  vig.addColorStop(0, "rgba(0,0,0,0)");
+  vig.addColorStop(1, "rgba(5,10,40,0.4)");
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawSnow(ctx: CanvasRenderingContext2D, time: number, cam: number) {
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  for (let k = 0; k < 110; k++) {
+    const depth = 0.4 + (k % 3) * 0.3;
+    const x = ((((k * 131 + time * (18 + (k % 5) * 7) - cam * depth) % W) + W) % W) + Math.sin(time * 1.3 + k) * 12;
+    const y = (k * 57 + time * (55 + (k % 4) * 25)) % H;
+    ctx.beginPath();
+    ctx.arc(x, y, 1.2 + (k % 3) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawSnowman(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
+  enemyFrame(ctx, e, 32, () => {
+    const sw = e.state === "walk" ? Math.sin(e.phase) : 0;
+    ctx.rotate(sw * 0.05);
+    const ball = (y: number, r: number) => {
+      const g = ctx.createRadialGradient(-r * 0.3, y - r * 0.3, r * 0.1, 0, y, r);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(1, "#b9cdea");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const arm = (sx: number, ang: number) => {
+      const hx = sx + Math.cos(ang) * 46;
+      const hy = -70 + Math.sin(ang) * 46;
+      ctx.strokeStyle = "#5a3a1c";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(sx, -70);
+      ctx.lineTo(hx, hy);
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx + Math.cos(ang - 0.5) * 12, hy + Math.sin(ang - 0.5) * 12);
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx + Math.cos(ang + 0.5) * 12, hy + Math.sin(ang + 0.5) * 12);
+      ctx.stroke();
+    };
+    arm(-16, armAngle(e, sw, true) + 0.3);
+    ball(-26, 26);
+    ball(-68, 20);
+    ball(-100, 15);
+    ctx.fillStyle = "#0b0b0b";
+    [0, 1, 2].forEach((i) => {
+      ctx.beginPath();
+      ctx.arc(0, -78 + i * 12, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = "#c8202e";
+    ctx.fillRect(-14, -90, 28, 7);
+    ctx.fillStyle = "#2a9d4a";
+    ctx.fillRect(-14, -90, 8, 7);
+    ctx.fillRect(2, -90, 8, 7);
+    ctx.fillRect(10, -84, 7, 18);
+    ctx.fillStyle = "#16161c";
+    ctx.fillRect(-14, -118, 28, 5);
+    ctx.fillRect(-9, -138, 18, 22);
+    ctx.fillStyle = "#c8202e";
+    ctx.fillRect(-9, -122, 18, 5);
+    ctx.shadowColor = "#ff2a2a";
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "#ff3a3a";
+    ctx.beginPath();
+    ctx.arc(-4, -104, 2.8, 0, Math.PI * 2);
+    ctx.arc(7, -104, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ff8a1e";
+    ctx.beginPath();
+    ctx.moveTo(8, -100);
+    ctx.lineTo(28, -97);
+    ctx.lineTo(8, -94);
+    ctx.fill();
+    ctx.fillStyle = "#0b0b0b";
+    for (let k = 0; k < 5; k++) {
+      ctx.beginPath();
+      ctx.arc(-6 + k * 4.5, -89 + Math.abs(k - 2) * 1.5, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    arm(16, armAngle(e, sw, false));
+  });
+}
+
+function drawElf(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
+  enemyFrame(ctx, e, 24, () => {
+    const sw = e.state === "walk" ? Math.sin(e.phase) : 0;
+    [-6, 6].forEach((lx, i) => {
+      const off = sw * 9 * (i ? 1 : -1);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(lx, -36);
+      ctx.lineTo(lx + off, -6);
+      ctx.stroke();
+      ctx.strokeStyle = "#e0262c";
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#2a9d4a";
+      ctx.beginPath();
+      ctx.moveTo(lx + off - 7, -4);
+      ctx.quadraticCurveTo(lx + off + 6, -10, lx + off + 20, -14);
+      ctx.quadraticCurveTo(lx + off + 12, 0, lx + off - 7, 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = "#2a9d4a";
+    ctx.beginPath();
+    ctx.moveTo(-14, -84);
+    ctx.lineTo(14, -84);
+    ctx.lineTo(18, -34);
+    ctx.lineTo(-18, -34);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(-18, -38, 36, 5);
+    ctx.fillStyle = "#3a2410";
+    ctx.fillRect(-16, -58, 32, 5);
+    ctx.fillStyle = "#ffd23f";
+    ctx.fillRect(-4, -59, 8, 7);
+    const arm = (sx: number, ang: number, club: boolean) => {
+      const hx = sx + Math.cos(ang) * 38;
+      const hy = -80 + Math.sin(ang) * 38;
+      ctx.strokeStyle = "#2a9d4a";
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(sx, -80);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+      ctx.fillStyle = "#f2c3a0";
+      ctx.beginPath();
+      ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      if (club) {
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + 4, hy - 30);
+        ctx.arc(hx + 10, hy - 30, 6, Math.PI, 0);
+        ctx.stroke();
+        ctx.strokeStyle = "#e0262c";
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    };
+    arm(-12, armAngle(e, sw, true) + 0.5, false);
+    ctx.fillStyle = "#f2c3a0";
+    ctx.beginPath();
+    ctx.moveTo(-14, -98);
+    ctx.lineTo(-30, -104);
+    ctx.lineTo(-12, -90);
+    ctx.moveTo(14, -98);
+    ctx.lineTo(30, -104);
+    ctx.lineTo(12, -90);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, -98, 15, 0, Math.PI * 2);
+    ctx.fill();
+    const bell = Math.sin(time * 4 + e.phase) * 4;
+    ctx.fillStyle = "#e0262c";
+    ctx.beginPath();
+    ctx.moveTo(-16, -104);
+    ctx.quadraticCurveTo(0, -150, 30, -138 + bell);
+    ctx.lineTo(16, -104);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(-17, -108, 34, 6);
+    ctx.fillStyle = "#ffd23f";
+    ctx.beginPath();
+    ctx.arc(30, -136 + bell, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = "#ff2a2a";
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "#ff3a3a";
+    ctx.beginPath();
+    ctx.arc(-5, -100, 2.2, 0, Math.PI * 2);
+    ctx.arc(6, -100, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#4a1010";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-9, -106);
+    ctx.lineTo(-2, -103);
+    ctx.moveTo(10, -106);
+    ctx.lineTo(3, -103);
+    ctx.stroke();
+    ctx.fillStyle = "#4a0a0a";
+    ctx.beginPath();
+    ctx.moveTo(-8, -92);
+    ctx.quadraticCurveTo(0, -84 + (e.state === "wind" ? 4 : 0), 9, -92);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(-4, -92, 3, 3);
+    ctx.fillRect(2, -92, 3, 3);
+    arm(12, armAngle(e, sw, false) + 0.3, true);
+  });
+}
+
+function drawGingerbread(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
+  enemyFrame(ctx, e, 16, () => {
+    const sw = e.state === "walk" ? Math.sin(e.phase * 1.6) : 0;
+    const wind = e.state === "wind";
+    if (wind) {
+      const p = Math.min(1, e.t / 0.22);
+      ctx.translate(p * 10, 0);
+      ctx.rotate(0.3 * p);
+    }
+    ctx.scale(0.55, 0.55);
+    const cookie = "#b8733a";
+    ctx.strokeStyle = cookie;
+    ctx.lineWidth = 11;
+    ctx.beginPath();
+    ctx.moveTo(-7, -26);
+    ctx.lineTo(-9 + sw * 8, -2);
+    ctx.moveTo(7, -26);
+    ctx.lineTo(9 - sw * 8, -2);
+    ctx.moveTo(-14, -50);
+    ctx.lineTo(-30 + sw * 4, -38 - (wind ? 20 : 0));
+    ctx.moveTo(14, -50);
+    ctx.lineTo(30 - sw * 4, -38 - (wind ? 20 : 0));
+    ctx.stroke();
+    ctx.fillStyle = cookie;
+    ctx.beginPath();
+    ctx.ellipse(0, -42, 16, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, -74, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-30 + sw * 4, -38);
+    ctx.lineTo(-24 + sw * 4, -42);
+    ctx.lineTo(-18, -48);
+    ctx.moveTo(30 - sw * 4, -38);
+    ctx.lineTo(24 - sw * 4, -42);
+    ctx.lineTo(18, -48);
+    ctx.moveTo(-9 + sw * 8, -8);
+    ctx.lineTo(-7 + sw * 8, -2);
+    ctx.moveTo(9 - sw * 8, -8);
+    ctx.lineTo(7 - sw * 8, -2);
+    ctx.stroke();
+    ctx.fillStyle = "#e0262c";
+    ctx.beginPath();
+    ctx.arc(0, -50, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#2a9d4a";
+    ctx.beginPath();
+    ctx.arc(0, -40, 3.2, 0, Math.PI * 2);
+    ctx.arc(0, -30, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(-6, -77, 3, 0, Math.PI * 2);
+    ctx.arc(7, -77, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c01818";
+    ctx.beginPath();
+    ctx.arc(-5, -77, 1.6, 0, Math.PI * 2);
+    ctx.arc(8, -77, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-8, -67);
+    ctx.quadraticCurveTo(0, -60 + (wind ? 4 : 0), 9, -67);
+    ctx.moveTo(-10, -84);
+    ctx.lineTo(-3, -81);
+    ctx.moveTo(11, -84);
+    ctx.lineTo(4, -81);
+    ctx.stroke();
+    void time;
+  });
+}
+
+function drawSanta(ctx: CanvasRenderingContext2D, b: Boss, time: number) {
+  const ph2 = b.hp <= b.maxHp / 2;
+  const S = 1.75;
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 82, 16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (b.state === "dying") {
+    ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 6);
+    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(b.t * 40);
+  }
+  if (b.frozen) ctx.filter = "saturate(0.25) hue-rotate(150deg) brightness(1.35)";
+  let lean = 0;
+  let crouch = 0;
+  let a1 = 0.9;
+  let a2 = 0.9;
+  const bob = b.state === "idle" ? Math.sin(time * 5) : 0;
+  const gift = b.state === "cast" && b.mode === 0 && !b.fired;
+  if (b.state === "cast") {
+    a1 = !b.fired ? -2.2 : 1.2;
+    a2 = a1;
+  } else if (b.state === "tele") {
+    lean = 0.12;
+    crouch = 10;
+    a1 = 2.7;
+    a2 = 2.5;
+  } else if (b.state === "pounce") {
+    lean = 0.22;
+    a1 = -0.1;
+    a2 = -0.1;
+  } else if (b.state === "land") {
+    lean = 0.28;
+    crouch = 8;
+    a1 = 1.4;
+    a2 = 1.3;
+  } else if (b.state === "idle") {
+    a1 = 0.9 + bob * 0.08;
+    a2 = 0.9 - bob * 0.08;
+  }
+  ctx.scale(b.face * S, S);
+  ctx.rotate(lean);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const red = "#c8201e";
+  ctx.fillStyle = "#7a4a22";
+  ctx.beginPath();
+  ctx.ellipse(-46, -84 + crouch, 30, 38, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e0262c";
+  ctx.fillRect(-58, -126 + crouch, 14, 12);
+  ctx.fillStyle = "#2a9d4a";
+  ctx.fillRect(-42, -122 + crouch, 12, 10);
+  const arm = (sx: number, ang: number) => {
+    const hx = sx + Math.cos(ang) * 56;
+    const hy = -100 + crouch + Math.sin(ang) * 56;
+    ctx.strokeStyle = red;
+    ctx.lineWidth = 20;
+    ctx.beginPath();
+    ctx.moveTo(sx, -100 + crouch);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(hx - Math.cos(ang) * 6, hy - Math.sin(ang) * 6, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#16161a";
+    ctx.beginPath();
+    ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    return [hx, hy];
+  };
+  arm(-34, a2);
+  ctx.strokeStyle = red;
+  ctx.lineWidth = 22;
+  ctx.beginPath();
+  ctx.moveTo(-14, -48 + crouch);
+  ctx.lineTo(-14 + bob * 6, -12);
+  ctx.moveTo(14, -48 + crouch);
+  ctx.lineTo(14 - bob * 6, -12);
+  ctx.stroke();
+  ctx.fillStyle = "#101014";
+  ctx.beginPath();
+  ctx.roundRect(-30 + bob * 6, -16, 34, 16, 4);
+  ctx.roundRect(-4 - bob * 6, -16, 34, 16, 4);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(-28 + bob * 6, -22, 30, 8);
+  ctx.fillRect(-2 - bob * 6, -22, 30, 8);
+  ctx.fillStyle = red;
+  ctx.beginPath();
+  ctx.ellipse(0, -76 + crouch, 46, 42 + bob, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(0, -36 + crouch, 44, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-6, -112 + crouch, 12, 76);
+  ctx.fillStyle = "#101014";
+  ctx.fillRect(-45, -70 + crouch, 90, 11);
+  ctx.fillStyle = "#ffd23f";
+  ctx.fillRect(-9, -73 + crouch, 18, 17);
+  ctx.fillStyle = "#101014";
+  ctx.fillRect(-4, -68 + crouch, 8, 7);
+  ctx.save();
+  ctx.translate(0, crouch);
+  ctx.rotate(b.state === "land" ? Math.sin(time * 8) * 0.16 : 0);
+  ctx.fillStyle = "#f1c6a5";
+  ctx.beginPath();
+  ctx.arc(0, -128, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,110,110,0.45)";
+  ctx.beginPath();
+  ctx.arc(-14, -122, 6, 0, Math.PI * 2);
+  ctx.arc(14, -122, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(0, -108, 30, 28, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#f1c6a5";
+  ctx.beginPath();
+  ctx.ellipse(0, -122, 15, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e9a08c";
+  ctx.beginPath();
+  ctx.arc(2, -120, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(-9, -113, 11, 5, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(9, -113, 11, 5, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  if (b.state === "dormant") {
+    ctx.strokeStyle = "#3a2a2a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-14, -132);
+    ctx.lineTo(-5, -131);
+    ctx.moveTo(14, -132);
+    ctx.lineTo(5, -131);
+    ctx.stroke();
+  } else {
+    const eye = ph2 ? "#ff3b3b" : "#1c1c28";
+    ctx.shadowColor = eye;
+    ctx.shadowBlur = ph2 ? 10 : 0;
+    ctx.fillStyle = eye;
+    ctx.beginPath();
+    ctx.arc(-9, -131, 3.4, 0, Math.PI * 2);
+    ctx.arc(9, -131, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#e8e8f0";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-17, -139);
+    ctx.lineTo(-3, -134);
+    ctx.moveTo(17, -139);
+    ctx.lineTo(3, -134);
+    ctx.stroke();
+  }
+  ctx.fillStyle = red;
+  ctx.beginPath();
+  ctx.moveTo(-24, -140);
+  ctx.quadraticCurveTo(-4, -186, 44, -150 + Math.sin(time * 3) * 3);
+  ctx.lineTo(24, -140);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.roundRect(-27, -148, 54, 12, 6);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(46, -146 + Math.sin(time * 3) * 3, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  const [fhx, fhy] = arm(34, a1);
+  if (gift) {
+    ctx.fillStyle = "#e0262c";
+    ctx.fillRect(fhx - 16, fhy - 30, 32, 28);
+    ctx.fillStyle = "#ffe46b";
+    ctx.fillRect(fhx - 3, fhy - 30, 6, 28);
+    ctx.fillRect(fhx - 16, fhy - 18, 32, 6);
+    ctx.beginPath();
+    ctx.ellipse(fhx - 7, fhy - 34, 8, 5, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(fhx + 7, fhy - 34, 8, 5, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (b.hurtT > 0) {
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.beginPath();
+    ctx.ellipse(0, -76 + crouch, 46, 42, 0, 0, Math.PI * 2);
+    ctx.arc(0, -128 + crouch, 24, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.font = "900 30px sans-serif";
+  ctx.textAlign = "center";
+  if (b.state === "land") {
+    ctx.fillStyle = "#ffe46b";
+    for (let k = 0; k < 3; k++) {
+      const a = time * 4 + k * 2.1;
+      ctx.fillText("\u2605", b.x + Math.cos(a) * 40, b.y - 285 + Math.sin(a) * 8);
+    }
+  }
+  if (b.state === "tele") {
+    ctx.fillStyle = "#ff3b3b";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 5;
+    ctx.font = "900 64px sans-serif";
+    ctx.strokeText("!", b.x, b.y - 290);
+    ctx.fillText("!", b.x, b.y - 290);
+  }
+  if (b.state === "intro" || b.state === "dormant") {
+    ctx.font = "900 34px sans-serif";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#5a0d0d";
+    ctx.fillStyle = "#fff";
+    const txt = b.state === "dormant" ? "Zzz" : "HO HO HO!";
+    ctx.strokeText(txt, b.x, b.y - 300);
+    ctx.fillText(txt, b.x, b.y - 300);
+  }
+}
+
+const tiny = (e: Enemy) => e.kind === "rat" || e.kind === "bat" || e.kind === "gingerbread";
+const dmgOf = (e: Enemy) =>
+  ({ goon: 8, brute: 16, rat: 4, bat: 5, zombie: 11, skeleton: 7, snowman: 11, elf: 7, gingerbread: 4 })[e.kind];
+const windupOf = (e: Enemy) =>
+  ({ goon: 0.4, brute: 0.4, rat: 0.22, bat: 0.22, zombie: 0.55, skeleton: 0.3, snowman: 0.55, elf: 0.3, gingerbread: 0.22 })[e.kind];
+const reachOf = (e: Enemy) =>
+  ({ goon: 76, brute: 90, rat: 46, bat: 46, zombie: 82, skeleton: 76, snowman: 82, elf: 76, gingerbread: 46 })[e.kind];
+const cdOf = (e: Enemy) => (tiny(e) ? 0.8 : e.kind === "zombie" || e.kind === "snowman" ? 1.6 : 1.3);
+
+function makeCookie(x: number, y: number, i: number): Enemy {
+  return { x, y, kind: "gingerbread", hp: 1, maxHp: 1, state: "walk", t: 0, face: -1, cd: 0.4, frozen: false, vx: 0, phase: i, spd: 190 };
+}
+
+const makeNorthPole = (): Enemy[] => {
+  const mk = (kind: EnemyKind, x: number, y: number, hp: number, spd: number, i: number): Enemy => ({
+    x,
+    y,
+    kind,
+    hp,
+    maxHp: hp,
+    state: "idle",
+    t: 0,
+    face: -1,
+    cd: 0.5 + (i % 3) * 0.3,
+    frozen: false,
+    vx: 0,
+    phase: i,
+    spd,
+  });
+  const ys = [400, 470, 360, 500, 430];
+  return [
+    ...Array.from({ length: 6 }, (_, i) => mk("snowman", 900 + i * 330 + (i % 2) * 40, ys[i % 5], 4, 55, i)),
+    ...Array.from({ length: 6 }, (_, i) => mk("elf", 1000 + i * 350, ys[(i + 2) % 5], 2, 125, i)),
+    ...Array.from({ length: 10 }, (_, i) => mk("gingerbread", 700 + i * 220 + (i % 3) * 40, ys[(i + 1) % 5], 1, 190, i)),
+  ].sort((a, b) => a.x - b.x);
+};
 
 const makeGrave = (): Enemy[] => {
   const mk = (kind: EnemyKind, x: number, y: number, hp: number, spd: number, i: number): Enemy => ({
@@ -2147,6 +2848,7 @@ const makeGrave = (): Enemy[] => {
 
 const makeEnemies = (level = 1): Enemy[] => {
   if (level === 3) return makeGrave();
+  if (level === 4) return makeNorthPole();
   const rats: Enemy[] =
     level === 2
       ? Array.from({ length: 10 }, (_, i) => ({
@@ -2173,6 +2875,7 @@ const LEVELS = [
   { n: 1, name: "The Barn" },
   { n: 2, name: "The Dark Forest" },
   { n: 3, name: "The Graveyard" },
+  { n: 4, name: "The North Pole" },
 ];
 const HEART_PIXELS = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"];
 const STAR_PIXELS = ["0001000", "0001000", "1111111", "0111110", "0011100", "0110110", "1100011"];
@@ -2261,6 +2964,7 @@ export function RumpelGame() {
       inv: 0,
       armed: false,
       fireT: 0,
+      deadT: -1,
     };
     let piles = makePiles();
     let enemies = makeEnemies(1);
@@ -2277,6 +2981,9 @@ export function RumpelGame() {
     let nextFlash = 2;
     let boltX = 400;
     let paused = false;
+    let santaSummoned = false;
+    let deathShown = false;
+    let deadBounced = false;
     let hasGun = false;
     let ammo = 100;
     let ammoDrops: { x: number; y: number }[] = [];
@@ -2301,7 +3008,7 @@ export function RumpelGame() {
     const sync = () => {
       setHp(Math.max(0, Math.round(hpNow)));
       setCharges(chargesNow);
-      setStatus(state);
+      setStatus(state === "lost" && !deathShown ? "playing" : state);
       setArmed(hasGun);
       setAmmo(ammo);
     };
@@ -2385,6 +3092,13 @@ export function RumpelGame() {
           b.x = Math.max(BOSS_MIN_X, Math.min(BOSS_MAX_X, b.x));
           const dy = hero.y - b.y;
           if (Math.abs(dy) > 8) b.y += Math.sign(dy) * 60 * dt;
+          if (b.kind === "santa" && ph2 && !santaSummoned) {
+            santaSummoned = true;
+            for (let k = 0; k < 4; k++) {
+              enemies.push(makeCookie(Math.max(BOSS_MIN_X, Math.min(BOSS_MAX_X, b.x - 200 + k * 110)), FLOOR_TOP + 30 + k * 40, k));
+            }
+            shake = 0.5;
+          }
           if (b.t > (ph2 ? 0.5 : 0.9)) {
             b.atk++;
             const m = b.atk % 3;
@@ -2406,6 +3120,7 @@ export function RumpelGame() {
                   y: k === 0 ? hero.y : Math.max(FLOOR_TOP + 10, Math.min(FLOOR_BOTTOM, hero.y + (Math.random() - 0.5) * 120)),
                   t: 0,
                   hit: false,
+                  gift: b.kind === "santa",
                 });
               }
             }
@@ -2471,7 +3186,7 @@ export function RumpelGame() {
       b.t += dt;
       const ph2 = b.hp <= b.maxHp / 2;
       if (b.state !== "pounce") b.face = hero.x < b.x ? -1 : 1;
-      if (b.kind === "frank" && ["idle", "tele", "pounce", "land", "cast"].includes(b.state)) {
+      if (b.kind !== "cat" && ["idle", "tele", "pounce", "land", "cast"].includes(b.state)) {
         stepFrank(b, ph2, dt);
         return;
       }
@@ -2612,6 +3327,9 @@ export function RumpelGame() {
       boss = n >= 2 ? makeBoss(n) : null;
       shots = [];
       strikes = [];
+      santaSummoned = false;
+      deathShown = false;
+      deadBounced = false;
       hasGun = false;
       ammo = 100;
       ammoDrops = [];
@@ -2623,7 +3341,7 @@ export function RumpelGame() {
       flashT = 0;
       nextFlash = 2;
       particles = [];
-      Object.assign(hero, { x: 120, y: 440, face: 1, danceT: 0, spinT: -1, kickT: -1, inv: 0, armed: false, fireT: 0 });
+      Object.assign(hero, { x: 120, y: 440, face: 1, danceT: 0, spinT: -1, kickT: -1, inv: 0, armed: false, fireT: 0, deadT: -1 });
       cam = 0;
       state = "playing";
       happy = false;
@@ -2712,13 +3430,37 @@ export function RumpelGame() {
     window.addEventListener("blur", onBlur);
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = Math.min(0.05, (now - last) / 1000) * (state === "lost" && hero.deadT >= 0 && hero.deadT < 0.6 ? 0.35 : 1);
       last = now;
       if (paused) {
         raf = requestAnimationFrame(frame);
         return;
       }
       const time = now / 1000;
+      if (state === "lost" && hero.deadT < 0) {
+        hero.deadT = 0;
+        hero.inv = 0;
+        hero.danceT = 0;
+        hero.spinT = -1;
+        hero.kickT = -1;
+        shootHeld = false;
+        keys.clear();
+        stopSpecial();
+        shake = 1;
+        burst(hero.x, hero.y - 40, 24);
+      }
+      if (hero.deadT >= 0) {
+        hero.deadT += dt;
+        if (!deadBounced && hero.deadT > 0.9) {
+          deadBounced = true;
+          shake = 0.8;
+          burst(hero.x - hero.face * 70, hero.y, 14);
+        }
+        if (!deathShown && hero.deadT > 1.9) {
+          deathShown = true;
+          setStatus("lost");
+        }
+      }
       const playing = state === "playing";
       const dancing = hero.danceT > 0;
 
@@ -3033,11 +3775,11 @@ export function RumpelGame() {
             kind: "heart",
           });
         }
-        if (level < 3) transT = 5;
+        if (level < 4) transT = 5;
         sync();
       }
 
-      if (state === "won" && level < 3) {
+      if (state === "won" && level < 4) {
         transT -= dt;
         const c = Math.max(0, Math.ceil(transT));
         if (c !== lastCount) {
@@ -3065,7 +3807,8 @@ export function RumpelGame() {
 
       if (level === 1) drawBarn(ctx, time, cam);
       else if (level === 2) drawForest(ctx, time, cam);
-      else drawGraveyard(ctx, time, cam, flashT > 0.3 ? boltX : -1);
+      else if (level === 3) drawGraveyard(ctx, time, cam, flashT > 0.3 ? boltX : -1);
+      else drawChristmas(ctx, time, cam);
       ctx.save();
       ctx.translate(-cam + (shake > 0 ? (Math.random() - 0.5) * shake * 20 : 0), shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0);
       if (boss && boss.state !== "dead") {
@@ -3085,6 +3828,37 @@ export function RumpelGame() {
         }
       }
       strikes.forEach((st) => {
+        if (st.gift) {
+          if (st.t < 0.9) {
+            ctx.strokeStyle = `rgba(${Math.floor(time * 6) % 2 ? "255,80,80" : "70,220,120"},${0.55 + Math.sin(time * 25) * 0.25})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.ellipse(st.x, st.y, 58, 58 / 1.6, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            const gy = st.y - (1 - st.t / 0.9) * 430;
+            ctx.save();
+            ctx.translate(st.x, gy - 20);
+            ctx.rotate(st.t * 6);
+            ctx.fillStyle = "#e0262c";
+            ctx.fillRect(-16, -16, 32, 32);
+            ctx.fillStyle = "#ffe46b";
+            ctx.fillRect(-3, -16, 6, 32);
+            ctx.fillRect(-16, -3, 32, 6);
+            ctx.restore();
+          } else {
+            const a = 1 - (st.t - 0.9) / 0.35;
+            ctx.strokeStyle = `rgba(255,230,120,${a})`;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.ellipse(st.x, st.y, 30 + (1 - a) * 60, (30 + (1 - a) * 60) / 1.6, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(255,90,90,${a * 0.5})`;
+            ctx.beginPath();
+            ctx.ellipse(st.x, st.y, 50, 50 / 1.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          return;
+        }
         if (st.t < 0.9) {
           ctx.strokeStyle = `rgba(120,200,255,${0.45 + Math.sin(time * 25) * 0.3})`;
           ctx.lineWidth = 4;
@@ -3158,12 +3932,38 @@ export function RumpelGame() {
       type Item = { y: number; draw: () => void };
       const items: Item[] = [
         ...piles.map((p) => ({ y: p.y, draw: () => drawPile(ctx, p, time) })),
-        ...(bs && bs.state !== "dead" ? [{ y: bs.y, draw: () => (bs.kind === "cat" ? drawBoss(ctx, bs, time) : drawFrank(ctx, bs, time)) }] : []),
+        ...(bs && bs.state !== "dead" ? [{ y: bs.y, draw: () => (bs.kind === "cat" ? drawBoss(ctx, bs, time) : bs.kind === "frank" ? drawFrank(ctx, bs, time) : drawSanta(ctx, bs, time)) }] : []),
         ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e, time) })),
         { y: WOMAN.y, draw: () => drawWoman(ctx, happy, time) },
         { y: hero.y, draw: () => drawHero(ctx, hero, time) },
       ];
       items.sort((a, b) => a.y - b.y).forEach((i) => i.draw());
+      if (hero.deadT > 1.1) {
+        const q = hero.deadT - 1.1;
+        const gx = hero.x - hero.face * 70;
+        const gy = hero.y - 50 - q * 70;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - q / 1.3) * 0.8;
+        ctx.fillStyle = "#cfe8ff";
+        ctx.beginPath();
+        ctx.arc(gx, gy - 30, 16, Math.PI, 0);
+        ctx.lineTo(gx + 16, gy + 20);
+        for (let k = 0; k < 4; k++) ctx.lineTo(gx + 16 - (k + 1) * 8, gy + 20 + (k % 2 ? -6 : 6));
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#1a1a2a";
+        ctx.beginPath();
+        ctx.arc(gx - 6, gy - 30, 3, 0, Math.PI * 2);
+        ctx.arc(gx + 6, gy - 30, 3, 0, Math.PI * 2);
+        ctx.ellipse(gx, gy - 18, 3, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffe46b";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(gx, gy - 54, 14, 5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       bullets.forEach((bl) => {
         const d = Math.sign(bl.vx);
         ctx.strokeStyle = "#fff6a8";
@@ -3243,6 +4043,33 @@ export function RumpelGame() {
       });
       ctx.restore();
 
+      if (level === 4) drawSnow(ctx, time, cam);
+      if (hero.deadT >= 0) {
+        const t2 = hero.deadT;
+        if (t2 < 0.4) {
+          ctx.fillStyle = `rgba(255,0,0,${0.35 * (1 - t2 / 0.4)})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+        if (t2 > 0.9) {
+          ctx.fillStyle = `rgba(0,0,0,${Math.min(0.45, (t2 - 0.9) * 0.5)})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+        if (t2 > 1.0 && !deathShown) {
+          const sc = Math.min(1, (t2 - 1.0) * 4);
+          ctx.save();
+          ctx.translate(W / 2, 250);
+          ctx.scale(0.6 + sc * 0.4, 0.6 + sc * 0.4);
+          ctx.globalAlpha = sc;
+          ctx.font = "900 120px sans-serif";
+          ctx.textAlign = "center";
+          ctx.lineWidth = 12;
+          ctx.strokeStyle = "#3a0505";
+          ctx.fillStyle = "#ff3b3b";
+          ctx.strokeText("K.O.", 0, 0);
+          ctx.fillText("K.O.", 0, 0);
+          ctx.restore();
+        }
+      }
       if (level === 3 && flashT > 0) {
         const f = flashT / 0.5;
         const flick = f > 0.6 ? 1 : Math.sin(flashT * 70) > 0 ? 0.8 : 0.25;
@@ -3255,12 +4082,12 @@ export function RumpelGame() {
         const bx = (W - bw) / 2;
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(bx - 4, 14, bw + 8, 28);
-        ctx.fillStyle = boss.hp <= boss.maxHp / 2 ? "#ff4d4d" : boss.kind === "cat" ? "#b27dff" : "#7ddc6a";
+        ctx.fillStyle = boss.hp <= boss.maxHp / 2 ? "#ff4d4d" : ({ cat: "#b27dff", frank: "#7ddc6a", santa: "#3ddc84" })[boss.kind];
         ctx.fillRect(bx, 18, (bw * boss.hp) / boss.maxHp, 20);
         ctx.fillStyle = "#fff";
         ctx.font = "900 14px sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText(boss.kind === "cat" ? "MYSTIC CAT" : "FRANKENSTEIN", bx + 8, 33);
+        ctx.fillText({ cat: "MYSTIC CAT", frank: "FRANKENSTEIN", santa: "SANTA CLAUS" }[boss.kind], bx + 8, 33);
         if (boss.state === "intro") {
           ctx.globalAlpha = Math.min(1, (1.8 - boss.t) * 2);
           ctx.font = "900 56px sans-serif";
@@ -3268,7 +4095,7 @@ export function RumpelGame() {
           ctx.lineWidth = 9;
           ctx.strokeStyle = "#2a0f55";
           ctx.fillStyle = "#e5ccff";
-          const bossTitle = boss.kind === "cat" ? "BOSS: MYSTIC CAT" : "BOSS: FRANKENSTEIN";
+          const bossTitle = "BOSS: " + { cat: "MYSTIC CAT", frank: "FRANKENSTEIN", santa: "SANTA CLAUS" }[boss.kind];
           ctx.strokeText(bossTitle, W / 2, 200);
           ctx.fillText(bossTitle, W / 2, 200);
           ctx.globalAlpha = 1;
@@ -3295,7 +4122,7 @@ export function RumpelGame() {
         ctx.lineWidth = 8;
         ctx.strokeStyle = "#1a0f08";
         ctx.fillStyle = "#ffd23f";
-        const title = ["LEVEL 1 \u00b7 THE BARN", "LEVEL 2 \u00b7 THE DARK FOREST", "LEVEL 3 \u00b7 THE GRAVEYARD"][level - 1];
+        const title = ["LEVEL 1 \u00b7 THE BARN", "LEVEL 2 \u00b7 THE DARK FOREST", "LEVEL 3 \u00b7 THE GRAVEYARD", "LEVEL 4 \u00b7 THE NORTH POLE"][level - 1];
         ctx.strokeText(title, W / 2, 200);
         ctx.fillText(title, W / 2, 200);
         ctx.globalAlpha = 1;
@@ -3446,16 +4273,16 @@ export function RumpelGame() {
             <p className="text-lg text-white/90">
               {status === "lost"
                 ? "Those goblins play rough."
-                : level < 3
-                  ? `Whisked away to the ${level === 1 ? "Dark Forest" : "Graveyard"} in ${countdown}...`
-                  : `The graveyard is quiet again. ${coins} gold in the bag.`}
+                : level < 4
+                  ? `Whisked away to the ${["Dark Forest", "Graveyard", "North Pole"][level - 1]} in ${countdown}...`
+                  : `Santa's on the naughty list now. ${coins} gold in the bag.`}
             </p>
             {status === "lost" && (
               <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.retry())}>
                 Try again
               </Button>
             )}
-            {status === "won" && level === 3 && (
+            {status === "won" && level === 4 && (
               <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.restart())}>
                 Play again
               </Button>
