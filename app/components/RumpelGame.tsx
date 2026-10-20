@@ -965,8 +965,264 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
 }
 
 
+type Boss = {
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  state: "dormant" | "intro" | "idle" | "tele" | "pounce" | "land" | "cast" | "dying" | "dead";
+  t: number;
+  face: number;
+  hurtT: number;
+  invT: number;
+  frozen: boolean;
+  atk: number;
+  sx: number;
+  sy: number;
+  tx: number;
+  ty: number;
+  air: number;
+  fired: boolean;
+};
+type Shot = { x: number; y: number; vx: number; kind: "orb" | "wave"; life: number };
+
+const BOSS_MIN_X = 2960;
+const BOSS_MAX_X = 3400;
+const GATE_X = WOMAN.x - 250;
+
+const makeBoss = (): Boss => ({
+  x: 3320,
+  y: 430,
+  hp: 40,
+  maxHp: 40,
+  state: "dormant",
+  t: 0,
+  face: -1,
+  hurtT: 0,
+  invT: 0,
+  frozen: false,
+  atk: 0,
+  sx: 0,
+  sy: 0,
+  tx: 0,
+  ty: 0,
+  air: 0,
+  fired: false,
+});
+
+function drawBoss(ctx: CanvasRenderingContext2D, b: Boss, time: number) {
+  const ph2 = b.hp <= b.maxHp / 2;
+  const asleep = b.state === "dormant";
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath();
+  const sh = Math.max(0.4, 1 - b.air / 300);
+  ctx.ellipse(0, 4, 120 * sh, 24 * sh, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.translate(0, -b.air);
+  if (b.state === "dying") {
+    ctx.translate((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8);
+    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(b.t * 40);
+  }
+  if (b.frozen) ctx.filter = "saturate(0.25) hue-rotate(150deg) brightness(1.35)";
+  const squash = b.state === "tele" ? 0.86 : b.state === "land" && b.t < 0.2 ? 0.8 : 1;
+  ctx.scale(b.face * 2.1, 2.1 * squash);
+
+  const pulse = 0.5 + 0.5 * Math.sin(time * 3);
+  const aura = ctx.createRadialGradient(0, -70, 20, 0, -70, 140);
+  aura.addColorStop(0, `rgba(170,110,255,${0.3 + pulse * 0.15})`);
+  aura.addColorStop(1, "rgba(170,110,255,0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(-160, -220, 320, 260);
+
+  // tails
+  ctx.lineCap = "round";
+  [0, 1].forEach((k) => {
+    ctx.strokeStyle = "#2a1d55";
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    const w = Math.sin(time * 2.2 + k) * 14;
+    ctx.moveTo(-70, -70);
+    ctx.bezierCurveTo(-120, -70 + w, -130 - k * 20, -140 - w, -100 - k * 25, -190 - k * 10);
+    ctx.stroke();
+    ctx.fillStyle = ph2 ? "#ff6a6a" : "#8fffe0";
+    ctx.beginPath();
+    ctx.arc(-100 - k * 25, -190 - k * 10, 8, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // legs
+  [-58, -36, 36, 58].forEach((lx, i) => {
+    ctx.fillStyle = i % 2 ? "#241a4d" : "#1b1340";
+    ctx.fillRect(lx - 8, -46, 16, 44);
+    ctx.fillStyle = "#cbbcff";
+    ctx.beginPath();
+    ctx.ellipse(lx + 3, -3, 14, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // body
+  const body = ctx.createLinearGradient(0, -115, 0, -20);
+  body.addColorStop(0, "#43308c");
+  body.addColorStop(1, "#1a1040");
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, -66, 84, 46, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e7dcff";
+  for (let k = 0; k < 22; k++) {
+    const sx = -70 + ((k * 37) % 140);
+    const sy = -100 + ((k * 23) % 60);
+    ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(time * 2 + k));
+    ctx.fillRect(sx, sy, 2.4, 2.4);
+  }
+  ctx.globalAlpha = b.state === "dying" ? 0.8 : 1;
+  ctx.strokeStyle = ph2 ? "#ff7a5a" : "#7dffd9";
+  ctx.lineWidth = 3;
+  for (let k = 0; k < 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(-50 + k * 28, -108);
+    ctx.lineTo(-44 + k * 28, -88);
+    ctx.lineTo(-54 + k * 28, -78);
+    ctx.stroke();
+  }
+
+  // head
+  ctx.fillStyle = "#2a1d62";
+  ctx.beginPath();
+  ctx.moveTo(58, -124);
+  ctx.lineTo(62, -156);
+  ctx.lineTo(86, -128);
+  ctx.moveTo(92, -126);
+  ctx.lineTo(116, -152);
+  ctx.lineTo(114, -112);
+  ctx.fill();
+  ctx.fillStyle = "#ff9ad5";
+  ctx.beginPath();
+  ctx.moveTo(66, -128);
+  ctx.lineTo(66, -146);
+  ctx.lineTo(80, -130);
+  ctx.moveTo(98, -128);
+  ctx.lineTo(108, -142);
+  ctx.lineTo(108, -118);
+  ctx.fill();
+  const hg = ctx.createRadialGradient(80, -110, 5, 84, -92, 50);
+  hg.addColorStop(0, "#5a43b3");
+  hg.addColorStop(1, "#2a1d62");
+  ctx.fillStyle = hg;
+  ctx.beginPath();
+  ctx.ellipse(86, -92, 46, 38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffd86a";
+  ctx.beginPath();
+  ctx.moveTo(88, -124);
+  ctx.lineTo(95, -114);
+  ctx.lineTo(88, -104);
+  ctx.lineTo(81, -114);
+  ctx.closePath();
+  ctx.fill();
+  const eye = ph2 ? "#ff3b3b" : "#7dffd9";
+  if (asleep) {
+    ctx.strokeStyle = eye;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(62, -98);
+    ctx.lineTo(80, -96);
+    ctx.moveTo(96, -96);
+    ctx.lineTo(114, -98);
+    ctx.stroke();
+  } else {
+    ctx.shadowColor = eye;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = eye;
+    ctx.beginPath();
+    ctx.ellipse(72, -98, 11, 8, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(104, -98, 11, 8, 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#0a0518";
+    ctx.beginPath();
+    ctx.ellipse(73, -98, 2.4, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(105, -98, 2.4, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#ff8fb8";
+  ctx.beginPath();
+  ctx.moveTo(84, -84);
+  ctx.lineTo(96, -84);
+  ctx.lineTo(90, -76);
+  ctx.closePath();
+  ctx.fill();
+  const open = b.state === "intro" || (b.state === "cast" && b.t > 0.4) || b.state === "pounce" ? 14 : 3;
+  ctx.fillStyle = "#14051f";
+  ctx.beginPath();
+  ctx.moveTo(72, -70);
+  ctx.quadraticCurveTo(90, -64 + open, 108, -70);
+  ctx.quadraticCurveTo(90, -72, 72, -70);
+  ctx.fill();
+  if (open > 3) {
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(76, -70);
+    ctx.lineTo(80, -58);
+    ctx.lineTo(84, -70);
+    ctx.moveTo(96, -70);
+    ctx.lineTo(100, -58);
+    ctx.lineTo(104, -70);
+    ctx.fill();
+  }
+  if (b.state === "cast") {
+    const r = Math.min(1, b.t / 0.9);
+    ctx.fillStyle = `rgba(200,120,255,${0.3 + r * 0.6})`;
+    ctx.beginPath();
+    ctx.arc(126, -70, 6 + r * 22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(230,220,255,0.8)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  [-8, 0, 8].forEach((o) => {
+    ctx.moveTo(108, -80 + o / 2);
+    ctx.lineTo(140, -86 + o * 1.5);
+  });
+  ctx.stroke();
+
+  if (b.hurtT > 0) {
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.beginPath();
+    ctx.ellipse(0, -66, 84, 46, 0, 0, Math.PI * 2);
+    ctx.ellipse(86, -92, 46, 38, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (b.frozen) {
+    ctx.fillStyle = "rgba(170,230,255,0.35)";
+    ctx.fillRect(-100, -160, 250, 165);
+  }
+  ctx.restore();
+
+  if (b.state === "land") {
+    ctx.fillStyle = "#ffe46b";
+    ctx.font = "900 26px sans-serif";
+    ctx.textAlign = "center";
+    for (let k = 0; k < 3; k++) {
+      const a = time * 4 + k * 2.1;
+      ctx.fillText("\u2605", b.x + b.face * 80 + Math.cos(a) * 40, b.y - 215 + Math.sin(a) * 8);
+    }
+  }
+  if (b.state === "tele") {
+    ctx.fillStyle = "#ff3b3b";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 5;
+    ctx.font = "900 64px sans-serif";
+    ctx.textAlign = "center";
+    ctx.strokeText("!", b.x + b.face * 70, b.y - 250);
+    ctx.fillText("!", b.x + b.face * 70, b.y - 250);
+  }
+}
+
 const makeEnemies = (level = 1): Enemy[] =>
-  Array.from({ length: level === 1 ? 11 : 15 }, (_, i) => {
+  Array.from({ length: level === 1 ? 11 : 10 }, (_, i) => {
     const brute = level === 1 ? i % 4 === 3 : i % 3 === 2;
     return {
       x: 950 + i * (level === 1 ? 240 : 190) + (i % 2) * 40,
@@ -1051,6 +1307,9 @@ export function RumpelGame() {
     let transT = 0;
     let bannerT = 3;
     let lastCount = -1;
+    let boss: Boss | null = null;
+    let shots: Shot[] = [];
+    let shake = 0;
     let particles: Particle[] = [];
     let cam = 0;
     let hpNow = MAX_HP;
@@ -1095,6 +1354,154 @@ export function RumpelGame() {
     const live = (e: Enemy) => e.state !== "idle" && e.state !== "dead";
     const onScreen = (e: Enemy) => e.x > cam - 40 && e.x < cam + W + 40;
 
+    const airborne = () => {
+      if (hero.spinT < 0) return false;
+      const p = hero.spinT / SPIN_TIME;
+      return p > 0.12 && p < 0.88;
+    };
+    const hurtHero = (dmg: number, dir: number) => {
+      if (state !== "playing" || hero.inv > 0) return;
+      hpNow -= dmg;
+      hero.inv = 0.9;
+      hero.x += dir * 24;
+      burst(hero.x, hero.y - 60, 8, "spark");
+      if (hpNow <= 0) {
+        hpNow = 0;
+        state = "lost";
+      }
+      sync();
+    };
+    const bossActive = (b: Boss | null): b is Boss =>
+      !!b && b.state !== "dormant" && b.state !== "intro" && b.state !== "dying" && b.state !== "dead";
+    const hitBoss = (dmg: number) => {
+      const b = boss;
+      if (!bossActive(b) || b.invT > 0 || b.air > 20) return;
+      b.hp -= b.state === "land" ? dmg * 2 : dmg;
+      b.invT = 0.25;
+      b.hurtT = 0.2;
+      burst(b.x, b.y - 100, 8, "spark");
+      if (b.hp <= 0) {
+        b.hp = 0;
+        b.state = "dying";
+        b.t = 0;
+        b.air = 0;
+        b.frozen = false;
+        shots = [];
+        shake = 1;
+        enemies.forEach((e) => {
+          if (e.state !== "dead") {
+            e.hp = 0;
+            e.state = "dead";
+            e.t = 0;
+          }
+        });
+      }
+    };
+    const updateBoss = (dt: number) => {
+      const b = boss;
+      if (!b || b.state === "dead") return;
+      if (b.invT > 0) b.invT -= dt;
+      if (b.hurtT > 0) b.hurtT -= dt;
+      if (b.frozen) return;
+      b.t += dt;
+      const ph2 = b.hp <= b.maxHp / 2;
+      if (b.state !== "pounce") b.face = hero.x < b.x ? -1 : 1;
+      switch (b.state) {
+        case "dormant":
+          if (state === "playing" && hero.x > 2850) {
+            b.state = "intro";
+            b.t = 0;
+            shake = 0.8;
+          }
+          break;
+        case "intro":
+          if (b.t > 1.8) {
+            b.state = "idle";
+            b.t = 0;
+          }
+          break;
+        case "idle": {
+          const dx = hero.x - b.x;
+          if (Math.abs(dx) > 260) b.x += Math.sign(dx) * 90 * dt;
+          b.x = Math.max(BOSS_MIN_X, Math.min(BOSS_MAX_X, b.x));
+          const dy = hero.y - b.y;
+          if (Math.abs(dy) > 8) b.y += Math.sign(dy) * 70 * dt;
+          if (b.t > (ph2 ? 0.6 : 1.1)) {
+            b.atk++;
+            b.state = b.atk % 3 === 0 ? "cast" : "tele";
+            b.t = 0;
+            b.fired = false;
+          }
+          break;
+        }
+        case "tele":
+          if (b.t >= (ph2 ? 0.5 : 0.75)) {
+            b.sx = b.x;
+            b.sy = b.y;
+            b.tx = Math.max(BOSS_MIN_X, Math.min(BOSS_MAX_X, hero.x));
+            b.ty = Math.max(FLOOR_TOP + 10, Math.min(FLOOR_BOTTOM, hero.y));
+            b.state = "pounce";
+            b.t = 0;
+          }
+          break;
+        case "pounce": {
+          const p = Math.min(1, b.t / 0.55);
+          b.x = b.sx + (b.tx - b.sx) * p;
+          b.y = b.sy + (b.ty - b.sy) * p;
+          b.air = Math.sin(p * Math.PI) * 170;
+          if (p >= 1) {
+            b.air = 0;
+            b.state = "land";
+            b.t = 0;
+            shake = 0.5;
+            burst(b.x, b.y, 14);
+            if (Math.hypot(hero.x - b.x, (hero.y - b.y) * 1.6) < 130 && !airborne()) {
+              hurtHero(18, hero.x >= b.x ? 1 : -1);
+            }
+            if (ph2) {
+              shots.push({ x: b.x, y: b.y, vx: 300, kind: "wave", life: 0 });
+              shots.push({ x: b.x, y: b.y, vx: -300, kind: "wave", life: 0 });
+            }
+          }
+          break;
+        }
+        case "land":
+          if (b.t > (ph2 ? 1.0 : 1.7)) {
+            b.state = "idle";
+            b.t = 0;
+          }
+          break;
+        case "cast":
+          if (!b.fired && b.t > 0.9) {
+            b.fired = true;
+            (ph2 ? [-55, 0, 55] : [0]).forEach((off) => {
+              shots.push({
+                x: b.x + b.face * 110,
+                y: Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, hero.y + off)),
+                vx: b.face * (ph2 ? 300 : 230),
+                kind: "orb",
+                life: 0,
+              });
+            });
+          }
+          if (b.t > 1.6) {
+            b.state = "idle";
+            b.t = 0;
+          }
+          break;
+        case "dying":
+          if (Math.random() < 0.5) burst(b.x + (Math.random() - 0.5) * 160, b.y - Math.random() * 160, 4);
+          shake = Math.max(shake, 0.4);
+          if (b.t > 2.2) {
+            b.state = "dead";
+            burst(b.x, b.y - 80, 40, "coin");
+            coinBase += 200;
+            setCoins(coinBase + piles.filter((pl) => pl.gold).length * COINS_PER_PILE);
+          }
+          break;
+      }
+    };
+
     const spin = () => {
       if (state !== "playing" || hero.spinT >= 0 || hero.danceT > 0) return;
       hero.spinT = 0;
@@ -1115,6 +1522,7 @@ export function RumpelGame() {
       enemies.forEach((e) => {
         if (live(e) && onScreen(e)) e.frozen = true;
       });
+      if (bossActive(boss)) boss.frozen = true;
       sync();
     };
     const loadLevel = (n: number) => {
@@ -1122,6 +1530,8 @@ export function RumpelGame() {
       level = n;
       piles = makePiles();
       enemies = makeEnemies(n);
+      boss = n === 2 ? makeBoss() : null;
+      shots = [];
       particles = [];
       Object.assign(hero, { x: 120, y: 440, face: 1, danceT: 0, spinT: -1, kickT: -1, inv: 0 });
       cam = 0;
@@ -1193,6 +1603,7 @@ export function RumpelGame() {
       }
       hero.x = Math.max(cam + 40, Math.min(Math.min(cam + W - 40, WORLD_W - 40), hero.x));
       hero.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, hero.y));
+      if (boss && boss.state !== "dead") hero.x = Math.min(hero.x, GATE_X);
       const wdx = hero.x - WOMAN.x;
       const wdy = (hero.y - WOMAN.y) * 1.6;
       const wd = Math.hypot(wdx, wdy);
@@ -1207,6 +1618,12 @@ export function RumpelGame() {
         hero.danceT = Math.max(0, hero.danceT - dt);
         if (hero.danceT === 0) {
           stopSpecial();
+          if (boss && boss.frozen) {
+            boss.frozen = false;
+            boss.invT = 0;
+            hitBoss(10);
+          }
+          shots = [];
           enemies.forEach((e) => {
             if (e.frozen && e.state !== "dead") {
               e.frozen = false;
@@ -1237,6 +1654,14 @@ export function RumpelGame() {
             if (fx > -10 && fx < 100 && Math.abs(e.y - hero.y) < 30) damageEnemy(e, 1, hero.face);
           });
           if (airborne) burst(hero.x, hero.y - 30, 14, "spark");
+          if (boss) {
+            if (airborne) {
+              if (Math.hypot(boss.x - hero.x, (boss.y - hero.y) * 1.6) < 190) hitBoss(2);
+            } else {
+              const bfx = (boss.x - hero.x) * hero.face;
+              if (bfx > -30 && bfx < 190 && Math.abs(boss.y - hero.y) < 45) hitBoss(1);
+            }
+          }
         }
         if (hero.kickT >= KICK_TIME) hero.kickT = -1;
       }
@@ -1260,6 +1685,7 @@ export function RumpelGame() {
               damageEnemy(e, 2, e.x >= hero.x ? 1 : -1);
             }
           });
+          if (boss && Math.hypot(boss.x - hero.x, (boss.y - hero.y) * 1.6) < 190) hitBoss(2);
           if (n > 0) {
             happy = true;
             particles.push({ x: WOMAN.x, y: WOMAN.y - 140, vx: 0, vy: -50, life: 0, max: 1.4, kind: "heart" });
@@ -1324,8 +1750,22 @@ export function RumpelGame() {
         }
       });
       enemies = enemies.filter((e) => !(e.state === "dead" && e.t > 0.6));
+      updateBoss(dt);
+      if (shake > 0) shake = Math.max(0, shake - dt);
+      if (hero.danceT <= 0) {
+        shots.forEach((sh) => {
+          sh.x += sh.vx * dt;
+          sh.life += dt;
+          if (state !== "playing") return;
+          if (Math.abs(sh.x - hero.x) < 28 && Math.abs(sh.y - hero.y) < 28 && !airborne()) {
+            hurtHero(sh.kind === "orb" ? 10 : 14, sh.vx > 0 ? 1 : -1);
+            if (sh.kind === "orb") sh.life = 99;
+          }
+        });
+        shots = shots.filter((sh) => sh.life < 4 && sh.x > cam - 100 && sh.x < cam + W + 100);
+      }
 
-      if (state === "playing" && hero.x > WOMAN.x - 120) {
+      if (state === "playing" && hero.x > WOMAN.x - 120 && !(boss && boss.state !== "dead")) {
         state = "won";
         happy = true;
         for (let k = 0; k < 8; k++) {
@@ -1372,15 +1812,58 @@ export function RumpelGame() {
       if (level === 1) drawBarn(ctx, time, cam);
       else drawForest(ctx, time, cam);
       ctx.save();
-      ctx.translate(-cam, 0);
+      ctx.translate(-cam + (shake > 0 ? (Math.random() - 0.5) * shake * 20 : 0), shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0);
+      if (boss && boss.state !== "dead") {
+        const gh = ctx.createLinearGradient(GATE_X - 20, 0, GATE_X + 20, 0);
+        gh.addColorStop(0, "rgba(170,110,255,0)");
+        gh.addColorStop(0.5, `rgba(190,140,255,${0.45 + Math.sin(time * 6) * 0.15})`);
+        gh.addColorStop(1, "rgba(170,110,255,0)");
+        ctx.fillStyle = gh;
+        ctx.fillRect(GATE_X - 20, FLOOR_TOP - 90, 40, FLOOR_BOTTOM - FLOOR_TOP + 100);
+        if (boss.state === "tele") {
+          const mx = Math.max(BOSS_MIN_X, Math.min(BOSS_MAX_X, hero.x));
+          ctx.strokeStyle = `rgba(255,70,70,${0.5 + Math.sin(time * 20) * 0.3})`;
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.ellipse(mx, hero.y, 130, 130 / 1.6, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      const bs = boss;
       type Item = { y: number; draw: () => void };
       const items: Item[] = [
         ...piles.map((p) => ({ y: p.y, draw: () => drawPile(ctx, p, time) })),
+        ...(bs && bs.state !== "dead" ? [{ y: bs.y, draw: () => drawBoss(ctx, bs, time) }] : []),
         ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e, time) })),
         { y: WOMAN.y, draw: () => drawWoman(ctx, happy, time) },
         { y: hero.y, draw: () => drawHero(ctx, hero, time) },
       ];
       items.sort((a, b) => a.y - b.y).forEach((i) => i.draw());
+      shots.forEach((sh) => {
+        if (sh.kind === "orb") {
+          const g2 = ctx.createRadialGradient(sh.x, sh.y - 60, 2, sh.x, sh.y - 60, 24);
+          g2.addColorStop(0, "#fff");
+          g2.addColorStop(0.4, "#c58bff");
+          g2.addColorStop(1, "rgba(150,80,255,0)");
+          ctx.fillStyle = g2;
+          ctx.beginPath();
+          ctx.arc(sh.x, sh.y - 60, 24, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.beginPath();
+          ctx.ellipse(sh.x, sh.y + 2, 14, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.strokeStyle = "rgba(255,120,200,0.9)";
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.ellipse(sh.x, sh.y, 14, 30, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,255,0.7)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      });
 
       if (hero.spinT >= 0) {
         const p = hero.spinT / SPIN_TIME;
@@ -1411,6 +1894,30 @@ export function RumpelGame() {
       });
       ctx.restore();
 
+      if (boss && boss.state !== "dormant" && boss.state !== "dead") {
+        const bw = 520;
+        const bx = (W - bw) / 2;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(bx - 4, 14, bw + 8, 28);
+        ctx.fillStyle = boss.hp <= boss.maxHp / 2 ? "#ff4d4d" : "#b27dff";
+        ctx.fillRect(bx, 18, (bw * boss.hp) / boss.maxHp, 20);
+        ctx.fillStyle = "#fff";
+        ctx.font = "900 14px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("MYSTIC CAT", bx + 8, 33);
+        if (boss.state === "intro") {
+          ctx.globalAlpha = Math.min(1, (1.8 - boss.t) * 2);
+          ctx.font = "900 56px sans-serif";
+          ctx.textAlign = "center";
+          ctx.lineWidth = 9;
+          ctx.strokeStyle = "#2a0f55";
+          ctx.fillStyle = "#e5ccff";
+          ctx.strokeText("BOSS: MYSTIC CAT", W / 2, 200);
+          ctx.fillText("BOSS: MYSTIC CAT", W / 2, 200);
+          ctx.globalAlpha = 1;
+        }
+      }
+
       if (hero.danceT > 0) {
         ctx.fillStyle = "rgba(90,170,255,0.22)";
         ctx.fillRect(0, 0, W, H);
@@ -1437,8 +1944,10 @@ export function RumpelGame() {
         ctx.globalAlpha = 1;
       }
 
-      const threats = enemies.some((e) => live(e) && onScreen(e)) || enemies.some((e) => e.state === "idle" && e.x < cam + W);
-      if (state === "playing" && !threats && cam < WORLD_W - W - 5 && Math.floor(time * 2) % 2 === 0) {
+      const bossLive = !!boss && boss.state !== "dead";
+      const arenaClear = level === 2 && !bossLive && hero.x < WOMAN.x - 200;
+      const threats = bossLive || enemies.some((e) => live(e) && onScreen(e)) || enemies.some((e) => e.state === "idle" && e.x < cam + W);
+      if (state === "playing" && !threats && (cam < WORLD_W - W - 5 || arenaClear) && Math.floor(time * 2) % 2 === 0) {
         ctx.font = "900 46px sans-serif";
         ctx.textAlign = "right";
         ctx.lineWidth = 8;
