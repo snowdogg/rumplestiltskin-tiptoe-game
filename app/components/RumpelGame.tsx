@@ -8,6 +8,8 @@ import {
   IconUpload,
   IconMoodCrazyHappy,
   IconHeart,
+  IconPlayerPause,
+  IconPlayerPlay,
   IconKarate,
   IconStarFilled,
 } from "@tabler/icons-react";
@@ -1252,7 +1254,9 @@ export function RumpelGame() {
     kick: () => {},
     restart: () => {},
     retry: () => {},
+    pause: () => {},
   });
+  const [paused, setPaused] = useState(false);
   const [level, setLevel] = useState(1);
   const [countdown, setCountdown] = useState(5);
   const [coins, setCoins] = useState(0);
@@ -1310,6 +1314,7 @@ export function RumpelGame() {
     let boss: Boss | null = null;
     let shots: Shot[] = [];
     let shake = 0;
+    let paused = false;
     let particles: Particle[] = [];
     let cam = 0;
     let hpNow = MAX_HP;
@@ -1526,6 +1531,8 @@ export function RumpelGame() {
       sync();
     };
     const loadLevel = (n: number) => {
+      paused = false;
+      setPaused(false);
       stopSpecial();
       level = n;
       piles = makePiles();
@@ -1555,13 +1562,36 @@ export function RumpelGame() {
       chargesNow = 2;
       loadLevel(level);
     };
-    actionsRef.current = { spin, dance, kick, restart, retry };
+    const togglePause = () => {
+      if (state !== "playing") return;
+      paused = !paused;
+      setPaused(paused);
+      keys.clear();
+      const a = audioRef.current;
+      if (a) {
+        if (paused) a.pause();
+        else if (hero.danceT > 0) a.play().catch(() => {});
+      }
+    };
+    actionsRef.current = {
+      spin: () => !paused && spin(),
+      dance: () => !paused && dance(),
+      kick: () => !paused && kick(),
+      restart,
+      retry,
+      pause: togglePause,
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       const k = e.key.toLowerCase();
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
+      if (k === "p") {
+        if (!e.repeat) togglePause();
+        return;
+      }
+      if (paused) return;
       if (k === " ") {
         if (!e.repeat) spin();
       } else if (k === "e") {
@@ -1581,6 +1611,10 @@ export function RumpelGame() {
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (paused) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
       const time = now / 1000;
       const playing = state === "playing";
       const dancing = hero.danceT > 0;
@@ -1620,8 +1654,9 @@ export function RumpelGame() {
           stopSpecial();
           if (boss && boss.frozen) {
             boss.frozen = false;
-            boss.invT = 0;
-            hitBoss(10);
+            boss.hp = Math.max(1, boss.hp - 10);
+            boss.hurtT = 0.3;
+            burst(boss.x, boss.y - 100, 16);
           }
           shots = [];
           enemies.forEach((e) => {
@@ -2018,6 +2053,9 @@ export function RumpelGame() {
           >
             <IconMoodCrazyHappy className="size-5" /> Tiptoe special ({charges})
           </Button>
+          <Button size="icon" variant="outline" className="rounded-full" onClick={press(() => actionsRef.current.pause())} aria-label="Pause">
+            {paused ? <IconPlayerPlay className="size-5" /> : <IconPlayerPause className="size-5" />}
+          </Button>
           <Button size="icon" variant="outline" className="rounded-full" onClick={press(() => actionsRef.current.restart())} aria-label="Restart">
             <IconRefresh className="size-5" />
           </Button>
@@ -2029,6 +2067,14 @@ export function RumpelGame() {
 
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
+        {paused && status === "playing" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 text-center">
+            <h2 className="text-5xl font-black text-white drop-shadow">Paused</h2>
+            <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.pause())}>
+              Resume (P)
+            </Button>
+          </div>
+        )}
         {status !== "playing" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 px-4 text-center">
             <h2 className="text-4xl font-black text-white drop-shadow sm:text-5xl">
@@ -2060,7 +2106,8 @@ export function RumpelGame() {
           <b className="text-foreground">Move:</b> Arrows / WASD &nbsp;·&nbsp;
           <b className="text-foreground">Kick:</b> K &nbsp;·&nbsp;
           <b className="text-foreground">Spin:</b> Space (press K mid-spin for a spin kick) &nbsp;·&nbsp;
-          <b className="text-foreground">Special (2 uses):</b> E
+          <b className="text-foreground">Special (2 uses):</b> E &nbsp;·&nbsp;
+          <b className="text-foreground">Pause:</b> P
         </p>
         {trackMissing && (
           <label className="flex cursor-pointer items-center gap-2 rounded-full bg-accent px-3 py-1.5 font-medium text-accent-foreground">
