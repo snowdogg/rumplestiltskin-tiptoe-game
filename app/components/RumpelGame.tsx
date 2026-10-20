@@ -449,6 +449,13 @@ type Enemy = {
   vx: number;
   phase: number;
   spd: number;
+  tx?: number;
+  ty?: number;
+  rt?: number;
+  mvx?: number;
+  mvy?: number;
+  pause?: number;
+  side?: number;
 };
 
 function drawRat(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
@@ -1873,16 +1880,40 @@ export function RumpelGame() {
         }
         const ex = hero.x - e.x;
         const ey = hero.y - e.y;
-        e.face = ex >= 0 ? 1 : -1;
         if (e.state === "walk") {
           if (!playing) return;
-          if (Math.abs(ex) > (e.kind === "rat" ? 26 : 58)) e.x += Math.sign(ex) * e.spd * dt;
-          if (Math.abs(ey) > 6) e.y += Math.sign(ey) * e.spd * 0.7 * dt;
-          e.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, e.y));
-          e.phase += dt * 10;
-          if (Math.abs(ex) <= (e.kind === "rat" ? 38 : 66) && Math.abs(ey) <= (e.kind === "rat" ? 12 : 18) && e.cd <= 0) {
+          const rat = e.kind === "rat";
+          e.rt = (e.rt ?? 0) - dt;
+          if (e.rt <= 0 || e.tx === undefined || e.ty === undefined) {
+            e.rt = 0.7 + Math.random() * 0.9;
+            if (e.side === undefined || Math.random() < 0.2) e.side = Math.random() < 0.5 ? -1 : 1;
+            const gap = rat ? 22 : 40 + Math.random() * 16;
+            e.tx = hero.x + e.side * gap;
+            e.ty = hero.y + (Math.random() - 0.5) * 24;
+            if (Math.random() < 0.3) e.pause = 0.25 + Math.random() * 0.5;
+          }
+          let dvx = 0;
+          let dvy = 0;
+          if ((e.pause ?? 0) > 0) {
+            e.pause = (e.pause ?? 0) - dt;
+          } else {
+            const tdx = e.tx - e.x;
+            const tdy = e.ty - e.y;
+            if (Math.abs(tdx) > 8) dvx = Math.max(-e.spd, Math.min(e.spd, tdx * 2.5));
+            if (Math.abs(tdy) > 6) dvy = Math.max(-e.spd * 0.6, Math.min(e.spd * 0.6, tdy * 2));
+          }
+          const k = Math.min(1, dt * 4);
+          e.mvx = (e.mvx ?? 0) + (dvx - (e.mvx ?? 0)) * k;
+          e.mvy = (e.mvy ?? 0) + (dvy - (e.mvy ?? 0)) * k;
+          e.x += e.mvx * dt;
+          e.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, e.y + e.mvy * dt));
+          if (Math.abs(ex) > 36) e.face = ex >= 0 ? 1 : -1;
+          e.phase += dt * 10 * Math.min(1, Math.hypot(e.mvx, e.mvy) / (e.spd * 0.5));
+          if (Math.abs(ex) <= (rat ? 40 : 72) && Math.abs(ey) <= (rat ? 14 : 20) && e.cd <= 0) {
             e.state = "wind";
             e.t = 0;
+            e.mvx = 0;
+            e.mvy = 0;
           }
         } else if (e.state === "wind") {
           e.t += dt;
