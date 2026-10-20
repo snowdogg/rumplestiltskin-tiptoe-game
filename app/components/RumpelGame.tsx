@@ -30,6 +30,12 @@ const SFX = {
   hurt: { file: "VideoGameDescend_S08TE.1300.wav", vol: 0.4, ms: 350 },
   death: { file: "VideoGameDescend_S011TE.100.wav", vol: 0.6, ms: 900 },
   bossDown: { file: "VideoGameArpeggio_S08TE.1_2.wav", vol: 0.6, ms: 800 },
+  kill: { file: "VideoGameBeeps_S08TE.1328.wav", vol: 0.45, ms: 400 },
+  slam: { file: "VideoGameConsole_S08TE.1297.wav", vol: 0.5, ms: 500 },
+  throwGun: { file: "VideoGameBeeps_S08TE.1332.wav", vol: 0.35, ms: 300 },
+  levelStart: { file: "VideoGameArpeggio_S08TE.128.wav", vol: 0.45, ms: 900 },
+  special: { file: "VideoGameAscend_S08TE.1288.wav", vol: 0.5, ms: 1200 },
+  cast: { file: "VideoGameDescend_S08TE.1302.wav", vol: 0.4, ms: 700 },
   win: { file: "VideoGameArpeggio_S08TE.1_3.wav", vol: 0.55, ms: 1500 },
 } as const;
 
@@ -3091,8 +3097,9 @@ export function RumpelGame() {
       e.vx = dir * 280;
       e.t = 0;
       e.state = e.hp <= 0 ? "dead" : "hurt";
-      if (e.hp <= 0 && level === 3 && Math.random() < 0.25) ammoDrops.push({ x: e.x, y: e.y });
+      if (e.hp <= 0 && level === 3 && Math.random() < 0.1) ammoDrops.push({ x: e.x, y: e.y });
       burst(e.x, e.y - 40, 6, "spark");
+      if (e.hp <= 0) playSfx("kill");
       splat(e.x, e.y - 50, e.hp <= 0 ? 22 : 10);
       playSfx("hit");
     };
@@ -3195,6 +3202,7 @@ export function RumpelGame() {
           } else {
             if (!b.fired && b.t > 0.7) {
               b.fired = true;
+              playSfx("cast");
               shake = 0.5;
               burst(b.x + b.face * 60, b.y, 12);
               shots.push({ x: b.x + b.face * 50, y: b.y, vx: b.face * 320, kind: "wave", life: 0 });
@@ -3229,6 +3237,7 @@ export function RumpelGame() {
             b.state = "land";
             b.t = 0;
             shake = 0.5;
+            playSfx("slam");
             burst(b.x, b.y, 14);
           }
           break;
@@ -3302,6 +3311,7 @@ export function RumpelGame() {
             b.state = "land";
             b.t = 0;
             shake = 0.5;
+            playSfx("slam");
             burst(b.x, b.y, 14);
             if (Math.hypot(hero.x - b.x, (hero.y - b.y) * 1.6) < 130 && !airborne()) {
               hurtHero(18, hero.x >= b.x ? 1 : -1);
@@ -3355,6 +3365,7 @@ export function RumpelGame() {
       hasGun = false;
       hero.armed = false;
       shootHeld = false;
+      playSfx("throwGun");
       thrown = { x: hero.x + hero.face * 30, y: hero.y, vx: hero.face * 620, t: 0, face: hero.face, hit: [], bossHit: false };
       sync();
     };
@@ -3374,6 +3385,7 @@ export function RumpelGame() {
       if (state !== "playing" || chargesNow <= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
       chargesNow--;
       playSpecial();
+      playSfx("special");
       hero.danceT = DANCE_TIME;
       hero.inv = DANCE_TIME + 0.3;
       hero.kickT = -1;
@@ -3413,6 +3425,7 @@ export function RumpelGame() {
       happy = false;
       bannerT = 3;
       transT = 0;
+      playSfx("levelStart");
       lastCount = -1;
       setLevel(n);
       setCoins(coinBase);
@@ -3520,6 +3533,7 @@ export function RumpelGame() {
         if (!deadBounced && hero.deadT > 0.9) {
           deadBounced = true;
           shake = 0.8;
+          playSfx("slam");
           burst(hero.x - hero.face * 70, hero.y, 14);
         }
         if (!deathShown && hero.deadT > 1.9) {
