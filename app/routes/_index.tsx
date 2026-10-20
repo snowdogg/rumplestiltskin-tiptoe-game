@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { APP_TITLE } from "@/lib/app-config";
 import { RumpelGame } from "@/components/RumpelGame";
 
 export function meta() {
@@ -24,7 +23,7 @@ export default function HomeRoute() {
             Rumpel&apos;s <span className="text-secondary">Tiptoe</span> Barn
           </h1>
           <p className="mt-1 text-base text-muted-foreground">
-            Shh... spin the hay into gold, then show her the dance. ({APP_TITLE})
+            Shh... spin the hay into gold, then show her the dance.
           </p>
         </header>
         {mounted ? <RumpelGame /> : null}
