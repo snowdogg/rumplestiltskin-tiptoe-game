@@ -606,8 +606,7 @@ export function RumpelGame() {
       if (keys.has("arrowright") || keys.has("d")) dx += 1;
       if (keys.has("arrowup") || keys.has("w")) dy -= 1;
       if (keys.has("arrowdown") || keys.has("s")) dy += 1;
-      const busy = hero.spinT >= 0;
-      hero.moving = (dx !== 0 || dy !== 0) && !busy;
+      hero.moving = dx !== 0 || dy !== 0;
       if (hero.moving) {
         const len = Math.hypot(dx, dy);
         hero.x += (dx / len) * SPEED * dt;
