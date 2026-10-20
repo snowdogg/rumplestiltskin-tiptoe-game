@@ -3433,7 +3433,7 @@ export function RumpelGame() {
     window.addEventListener("blur", onBlur);
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000) * (state === "lost" && hero.deadT >= 0 && hero.deadT < 0.6 ? 0.35 : 1);
+      const dt = Math.min(0.05, (now - last) / 1000) * (state === "lost" && hero.deadT >= 0 && hero.deadT < 1.1 ? 0.4 : 1);
       last = now;
       if (paused) {
         raf = requestAnimationFrame(frame);
@@ -3801,6 +3801,15 @@ export function RumpelGame() {
       });
       particles = particles.filter((p) => p.life < p.max);
 
+      ctx.save();
+      if (hero.deadT >= 0) {
+        const z = 1 + 0.4 * Math.min(1, hero.deadT / 1.4);
+        const fx = hero.x - cam;
+        const fy = hero.y - 60;
+        ctx.translate(fx, fy);
+        ctx.scale(z, z);
+        ctx.translate(-fx, -fy);
+      }
       if (level === 1) drawBarn(ctx, time, cam);
       else if (level === 2) drawForest(ctx, time, cam);
       else if (level === 3) drawGraveyard(ctx, time, cam, flashT > 0.3 ? boltX : -1);
@@ -3928,8 +3937,38 @@ export function RumpelGame() {
       type Item = { y: number; draw: () => void };
       const items: Item[] = [
         ...piles.map((p) => ({ y: p.y, draw: () => drawPile(ctx, p, time) })),
-        ...(bs && bs.state !== "dead" ? [{ y: bs.y, draw: () => (bs.kind === "cat" ? drawBoss(ctx, bs, time) : bs.kind === "frank" ? drawFrank(ctx, bs, time) : drawSanta(ctx, bs, time)) }] : []),
-        ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e, time) })),
+        ...(bs && bs.state !== "dead" ? [{ y: bs.y, draw: () => {
+          const bhop = state === "lost" && hero.deadT > 0.35 && bossActive(bs) ? Math.abs(Math.sin(time * 8)) * 14 : 0;
+          ctx.save();
+          ctx.translate(0, -bhop);
+          if (bs.kind === "cat") drawBoss(ctx, bs, time);
+          else if (bs.kind === "frank") drawFrank(ctx, bs, time);
+          else drawSanta(ctx, bs, time);
+          ctx.restore();
+        } }] : []),
+        ...enemies.map((e) => ({
+          y: e.y,
+          draw: () => {
+            if (!(state === "lost" && hero.deadT > 0.35 && live(e) && !e.frozen && Math.abs(e.x - hero.x) < 520)) {
+              drawEnemy(ctx, e, time);
+              return;
+            }
+            const hop = Math.abs(Math.sin(time * 9 + e.phase * 1.7)) * 20;
+            ctx.save();
+            ctx.translate(0, -hop);
+            drawEnemy(ctx, { ...e, state: "wind", t: 0.05 }, time);
+            ctx.restore();
+            ctx.font = "900 18px sans-serif";
+            ctx.textAlign = "center";
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#000";
+            ctx.fillStyle = "#fff";
+            const word = ["HA HA!", "YEAH!", "LOL", "WOO!"][Math.abs(Math.floor(e.phase)) % 4];
+            const by = e.y - 150 - hop * 0.5;
+            ctx.strokeText(word, e.x, by);
+            ctx.fillText(word, e.x, by);
+          },
+        })),
         { y: WOMAN.y, draw: () => drawWoman(ctx, happy, time) },
         { y: hero.y, draw: () => drawHero(ctx, hero, time) },
       ];
@@ -4037,6 +4076,7 @@ export function RumpelGame() {
           ctx.fill();
         }
       });
+      ctx.restore();
       ctx.restore();
 
       if (level === 4) drawSnow(ctx, time, cam);
