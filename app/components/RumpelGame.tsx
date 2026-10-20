@@ -857,7 +857,10 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
     if (t < 0.45) ang = 0.5 * (t / 0.45) ** 2;
     else if (t < 0.9) ang = 0.5 + (Math.PI / 2 - 0.5) * ((t - 0.45) / 0.45) ** 2;
     else if (t < 1.05) ang = Math.PI / 2 - 0.12 * Math.sin(((t - 0.9) / 0.15) * Math.PI);
-    ctx.translate(-h.face * Math.min(t, 0.9) * 55, -(t < 0.45 ? Math.sin((t / 0.45) * Math.PI) * 22 : 0));
+    ctx.translate(
+      -h.face * Math.min(t, 0.9) * 55,
+      -(t < 0.45 ? Math.sin((t / 0.45) * Math.PI) * 22 : 0) - (ang / (Math.PI / 2)) * 22,
+    );
     ctx.rotate(-h.face * ang);
   }
   let sx = h.face;
