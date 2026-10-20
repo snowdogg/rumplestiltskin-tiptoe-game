@@ -845,7 +845,7 @@ export function RumpelGame() {
       converted = false;
     };
     const kick = () => {
-      if (state !== "playing" || hero.kickT >= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
+      if (state !== "playing" || hero.kickT >= 0 || hero.danceT > 0) return;
       hero.kickT = 0;
       kickHit = false;
     };
@@ -961,11 +961,19 @@ export function RumpelGame() {
         hero.kickT += dt;
         if (!kickHit && hero.kickT > 0.12) {
           kickHit = true;
+          const airborne = hero.spinT >= 0;
           enemies.forEach((e) => {
             if (!live(e)) return;
+            if (airborne) {
+              if (Math.hypot(e.x - hero.x, (e.y - hero.y) * 1.6) < 125) {
+                damageEnemy(e, 2, e.x >= hero.x ? 1 : -1);
+              }
+              return;
+            }
             const fx = (e.x - hero.x) * hero.face;
             if (fx > -10 && fx < 100 && Math.abs(e.y - hero.y) < 30) damageEnemy(e, 1, hero.face);
           });
+          if (airborne) burst(hero.x, hero.y - 30, 14, "spark");
         }
         if (hero.kickT >= KICK_TIME) hero.kickT = -1;
       }
@@ -1240,7 +1248,7 @@ export function RumpelGame() {
         <p>
           <b className="text-foreground">Move:</b> Arrows / WASD &nbsp;·&nbsp;
           <b className="text-foreground">Kick:</b> K &nbsp;·&nbsp;
-          <b className="text-foreground">Spin:</b> Space &nbsp;·&nbsp;
+          <b className="text-foreground">Spin:</b> Space (press K mid-spin for a spin kick) &nbsp;·&nbsp;
           <b className="text-foreground">Special (2 uses):</b> E
         </p>
         {trackMissing && (
