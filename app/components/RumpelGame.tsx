@@ -1378,10 +1378,10 @@ export function RumpelGame() {
     };
     const bossActive = (b: Boss | null): b is Boss =>
       !!b && b.state !== "dormant" && b.state !== "intro" && b.state !== "dying" && b.state !== "dead";
-    const hitBoss = (dmg: number) => {
+    const hitBoss = (dmg: number, force = false) => {
       const b = boss;
-      if (!bossActive(b) || b.invT > 0 || b.air > 20) return;
-      b.hp -= b.state === "land" ? dmg * 2 : dmg;
+      if (!bossActive(b) || (!force && (b.invT > 0 || b.air > 20))) return;
+      b.hp -= !force && b.state === "land" ? dmg * 2 : dmg;
       b.invT = 0.25;
       b.hurtT = 0.2;
       burst(b.x, b.y - 100, 8, "spark");
@@ -1654,8 +1654,7 @@ export function RumpelGame() {
           stopSpecial();
           if (boss && boss.frozen) {
             boss.frozen = false;
-            boss.hp = Math.max(1, boss.hp - 10);
-            boss.hurtT = 0.3;
+            hitBoss(10, true);
             burst(boss.x, boss.y - 100, 16);
           }
           shots = [];
