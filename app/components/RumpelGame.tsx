@@ -3534,6 +3534,7 @@ export function RumpelGame() {
       keys.clear();
       shootHeld = false;
     };
+    window.focus();
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
@@ -4327,10 +4328,6 @@ export function RumpelGame() {
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-lg font-extrabold text-primary-foreground shadow-md">
-            <IconCoin className="size-6" stroke={2.5} />
-            <span>{coins}</span>
-          </div>
           <div className="rounded-full bg-card px-4 py-2 text-sm font-extrabold shadow-md">Level {level}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -4393,6 +4390,10 @@ export function RumpelGame() {
 
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
+        <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-base font-extrabold text-primary-foreground shadow-md">
+          <IconCoin className="size-5" stroke={2.5} />
+          <span>{coins}</span>
+        </div>
         <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 font-mono text-[10px] font-bold uppercase leading-none text-white">
           <div className="flex items-center gap-1.5 border-2 border-black bg-[#1a1020]/90 px-1.5 py-1 shadow-[2px_2px_0_#000]">
             <PixelIcon rows={HEART_PIXELS} color="#ff4d6d" />
