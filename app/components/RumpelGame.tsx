@@ -4327,7 +4327,7 @@ export function RumpelGame() {
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-lg font-extrabold text-primary-foreground shadow-md">
+          <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-lg font-extrabold text-primary-foreground shadow-md">
             <IconCoin className="size-6" stroke={2.5} />
             <span>{coins}</span>
           </div>
