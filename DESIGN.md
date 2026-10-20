@@ -38,14 +38,14 @@ visual direction — read and preserve them on every subsequent build; do not
 re-derive a new direction. The first UI pass must fill these fields in as
 part of that build, not leave them as an empty template.
 
-- Product mode: `operate` | `read` | `persuade` | `experience`
-- Audience and cadence:
-- Visual world (name + the feeling it creates):
-- Palette family + neutral undertone:
-- Type treatment:
-- Composition:
-- Shape language:
-- Anti-references (defaults this app must not drift toward):
+- Product mode: `experience`
+- Audience and cadence: meme fans, short playful sessions
+- Visual world (name + the feeling it creates): Barn storybook; warm lantern-lit hay barn, cheeky and a little eerie-funny
+- Palette family + neutral undertone: gold/amber primary, hay yellow accents, barn-red secondary; warm cream and brown neutrals
+- Type treatment: chunky heavy-weight sans headlines (Inter Variable black), friendly rounded buttons
+- Composition: centered game stage with HUD and action buttons above, controls legend below
+- Shape language: round and chunky; pill buttons, 2rem stage corners, thick gold borders
+- Anti-references (defaults this app must not drift toward): gray SaaS dashboards, dark neon arcade, glossy corporate game UI
 
 ## Agent-Native is structural, not visual
 
