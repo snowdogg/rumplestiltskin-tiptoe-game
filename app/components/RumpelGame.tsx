@@ -436,7 +436,7 @@ type Hero = {
   inv: number;
 };
 
-type EnemyKind = "goon" | "brute";
+type EnemyKind = "goon" | "brute" | "rat";
 type Enemy = {
   x: number;
   y: number;
@@ -453,7 +453,88 @@ type Enemy = {
   spd: number;
 };
 
+function drawRat(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 18, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (e.state === "dead") ctx.globalAlpha = Math.max(0, 1 - e.t / 0.6);
+  if (e.frozen) ctx.filter = "saturate(0.25) hue-rotate(150deg) brightness(1.35)";
+  ctx.scale(e.face, 1);
+  if (e.state === "dead") ctx.rotate(-Math.min(1, e.t * 5) * 1.3);
+  if (e.state === "hurt") ctx.translate(-4, 0);
+  if (e.state === "wind") {
+    const p = Math.min(1, e.t / 0.22);
+    ctx.translate(p * 10, 0);
+    ctx.rotate(-0.35 * p);
+  }
+  const run = e.state === "walk" ? Math.sin(e.phase * 1.6) : 0;
+  ctx.strokeStyle = "#3d332e";
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  [-8, -3, 6, 11].forEach((lx, i) => {
+    ctx.beginPath();
+    ctx.moveTo(lx, -6);
+    ctx.lineTo(lx + run * 5 * (i % 2 ? 1 : -1), 0);
+    ctx.stroke();
+  });
+  ctx.strokeStyle = "#e9a3a8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-14, -9);
+  ctx.quadraticCurveTo(-24, -4 + Math.sin(time * 8 + e.phase) * 4, -32, -12 + Math.sin(time * 6 + e.phase) * 4);
+  ctx.stroke();
+  ctx.fillStyle = "#6b5d55";
+  ctx.beginPath();
+  ctx.ellipse(0, -10, 14, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#8a7a70";
+  ctx.beginPath();
+  ctx.ellipse(1, -7, 10, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#6b5d55";
+  ctx.beginPath();
+  ctx.ellipse(15, -11, 8, 6, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e9a3a8";
+  ctx.beginPath();
+  ctx.arc(11, -18, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#4a3f39";
+  ctx.beginPath();
+  ctx.arc(11, -18, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ff8fa0";
+  ctx.beginPath();
+  ctx.arc(23, -11, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ff2a2a";
+  ctx.beginPath();
+  ctx.arc(17, -13, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  if (e.state === "wind") {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(20, -8, 2, 3);
+    ctx.fillRect(23, -8, 2, 3);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(22, -11);
+  ctx.lineTo(30, -14);
+  ctx.moveTo(22, -10);
+  ctx.lineTo(30, -9);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
+  if (e.kind === "rat") {
+    drawRat(ctx, e, time);
+    return;
+  }
   const brute = e.kind === "brute";
   const sc = brute ? 1.3 : 1;
   const skin = brute ? "#7d8268" : "#cdb8c8";
@@ -1223,7 +1304,7 @@ function drawBoss(ctx: CanvasRenderingContext2D, b: Boss, time: number) {
   }
 }
 
-const makeEnemies = (level = 1): Enemy[] =>
+const makeThugs = (level = 1): Enemy[] =>
   Array.from({ length: level === 1 ? 11 : 10 }, (_, i) => {
     const brute = level === 1 ? i % 4 === 3 : i % 3 === 2;
     return {
@@ -1242,6 +1323,28 @@ const makeEnemies = (level = 1): Enemy[] =>
       spd: brute ? 70 : 100 + (i % 3) * 12,
     } as Enemy;
   });
+
+const makeEnemies = (level = 1): Enemy[] => {
+  const rats: Enemy[] =
+    level === 2
+      ? Array.from({ length: 10 }, (_, i) => ({
+          x: 800 + i * 220 + (i % 3) * 50,
+          y: [380, 450, 490, 410, 470][i % 5],
+          kind: "rat" as const,
+          hp: 1,
+          maxHp: 1,
+          state: "idle" as const,
+          t: 0,
+          face: -1,
+          cd: 0.3,
+          frozen: false,
+          vx: 0,
+          phase: i,
+          spd: 170 + (i % 3) * 20,
+        }))
+      : [];
+  return [...makeThugs(level), ...rats].sort((a, b) => a.x - b.x);
+};
 
 type Status = "playing" | "won" | "lost";
 
@@ -1755,20 +1858,20 @@ export function RumpelGame() {
         e.face = ex >= 0 ? 1 : -1;
         if (e.state === "walk") {
           if (!playing) return;
-          if (Math.abs(ex) > 58) e.x += Math.sign(ex) * e.spd * dt;
+          if (Math.abs(ex) > (e.kind === "rat" ? 26 : 58)) e.x += Math.sign(ex) * e.spd * dt;
           if (Math.abs(ey) > 6) e.y += Math.sign(ey) * e.spd * 0.7 * dt;
           e.y = Math.max(FLOOR_TOP, Math.min(FLOOR_BOTTOM, e.y));
           e.phase += dt * 10;
-          if (Math.abs(ex) <= 66 && Math.abs(ey) <= 18 && e.cd <= 0) {
+          if (Math.abs(ex) <= (e.kind === "rat" ? 38 : 66) && Math.abs(ey) <= (e.kind === "rat" ? 12 : 18) && e.cd <= 0) {
             e.state = "wind";
             e.t = 0;
           }
         } else if (e.state === "wind") {
           e.t += dt;
-          if (e.t > 0.4) {
-            const reach = e.kind === "brute" ? 90 : 76;
+          if (e.t > (e.kind === "rat" ? 0.22 : 0.4)) {
+            const reach = e.kind === "brute" ? 90 : e.kind === "rat" ? 46 : 76;
             if (playing && hero.inv <= 0 && Math.abs(ex) < reach && Math.abs(ey) < 26) {
-              hpNow -= e.kind === "brute" ? 16 : 8;
+              hpNow -= e.kind === "brute" ? 16 : e.kind === "rat" ? 4 : 8;
               hero.inv = 0.9;
               hero.x += e.face * 24;
               burst(hero.x, hero.y - 60, 8, "spark");
@@ -1778,7 +1881,7 @@ export function RumpelGame() {
               }
               sync();
             }
-            e.cd = 1.3;
+            e.cd = e.kind === "rat" ? 0.8 : 1.3;
             e.state = "walk";
           }
         }
