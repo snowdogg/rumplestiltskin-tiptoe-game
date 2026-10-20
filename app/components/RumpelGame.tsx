@@ -30,6 +30,7 @@ const SFX = {
   hurt: { file: "VideoGameDescend_S08TE.1300.wav", vol: 0.4, ms: 350 },
   death: { file: "VideoGameDescend_S011TE.100.wav", vol: 0.6, ms: 900 },
   bossDown: { file: "VideoGameArpeggio_S08TE.1_2.wav", vol: 0.6, ms: 800 },
+  spinKick: { file: "VideoGameBeeps_S08TE.1329.wav", vol: 0.55, ms: 350 },
   kill: { file: "VideoGameBeeps_S08TE.1328.wav", vol: 0.45, ms: 400 },
   slam: { file: "VideoGameConsole_S08TE.1297.wav", vol: 0.5, ms: 500 },
   throwGun: { file: "VideoGameBeeps_S08TE.1332.wav", vol: 0.35, ms: 300 },
@@ -39,20 +40,49 @@ const SFX = {
   win: { file: "VideoGameArpeggio_S08TE.1_3.wav", vol: 0.55, ms: 1500 },
 } as const;
 
-const sfxCache: Record<string, HTMLAudioElement> = {};
+const sfxBuffers: Record<string, AudioBuffer> = {};
 const sfxLast: Record<string, number> = {};
+let sfxCtx: AudioContext | null = null;
+
+function warmSfx() {
+  if (typeof window === "undefined") return;
+  if (!sfxCtx) {
+    sfxCtx = new AudioContext();
+    const ctx = sfxCtx;
+    new Set(Object.values(SFX).map((s) => s.file)).forEach((file) => {
+      fetch(`/sounds/${file}`)
+        .then((r) => r.arrayBuffer())
+        .then((b) => ctx.decodeAudioData(b))
+        .then((buf) => {
+          sfxBuffers[file] = buf;
+        })
+        .catch(() => {});
+    });
+  }
+  if (sfxCtx.state === "suspended") sfxCtx.resume().catch(() => {});
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", warmSfx);
+  window.addEventListener("keydown", warmSfx);
+}
 
 function playSfx(name: keyof typeof SFX, minGap = 40) {
-  if (typeof Audio === "undefined") return;
   const now = performance.now();
   if (now - (sfxLast[name] ?? 0) < minGap) return;
   sfxLast[name] = now;
+  warmSfx();
   const s = SFX[name];
-  const base = (sfxCache[s.file] ??= new Audio(`/sounds/${s.file}`));
-  const a = base.cloneNode() as HTMLAudioElement;
-  a.volume = s.vol;
-  a.play().catch(() => {});
-  setTimeout(() => a.pause(), s.ms);
+  const buf = sfxBuffers[s.file];
+  if (!sfxCtx || !buf) return;
+  const src = sfxCtx.createBufferSource();
+  const gain = sfxCtx.createGain();
+  src.buffer = buf;
+  gain.gain.value = s.vol;
+  gain.gain.setTargetAtTime(0, sfxCtx.currentTime + s.ms / 1000 - 0.06, 0.02);
+  src.connect(gain).connect(sfxCtx.destination);
+  src.start();
+  src.stop(sfxCtx.currentTime + s.ms / 1000);
 }
 
 const SPEED = 230;
@@ -3649,7 +3679,10 @@ export function RumpelGame() {
             const fx = (e.x - hero.x) * hero.face;
             if (fx > -10 && fx < 100 && Math.abs(e.y - hero.y) < 30) damageEnemy(e, 1, hero.face);
           });
-          if (airborne) burst(hero.x, hero.y - 30, 14, "spark");
+          if (airborne) {
+            burst(hero.x, hero.y - 30, 14, "spark");
+            playSfx("spinKick", 120);
+          }
           if (boss) {
             if (airborne) {
               if (Math.hypot(boss.x - hero.x, (boss.y - hero.y) * 1.6) < 190) hitBoss(2);
