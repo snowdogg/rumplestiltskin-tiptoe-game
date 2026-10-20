@@ -2127,17 +2127,6 @@ export function RumpelGame() {
             <span>{coins}</span>
           </div>
           <div className="rounded-full bg-card px-4 py-2 text-sm font-extrabold shadow-md">Level {level}</div>
-          <div className="flex items-center gap-2 rounded-full bg-card px-3 py-2 shadow-md">
-            <IconHeart className="size-5 text-secondary" stroke={2.5} />
-            <div className="h-3.5 w-32 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-secondary transition-all" style={{ width: `${hp}%` }} />
-            </div>
-          </div>
-          <div className="flex items-center gap-1 rounded-full bg-card px-3 py-2 shadow-md" title="Tiptoe specials left">
-            {[0, 1].map((i) => (
-              <IconStarFilled key={i} className={i < charges ? "size-5 text-primary" : "size-5 text-muted-foreground/30"} />
-            ))}
-          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.kick())}>
@@ -2169,6 +2158,19 @@ export function RumpelGame() {
 
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
+        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full bg-card/90 px-3 py-2 shadow-md">
+            <IconHeart className="size-5 text-secondary" stroke={2.5} />
+            <div className="h-3.5 w-32 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-secondary transition-all" style={{ width: `${hp}%` }} />
+            </div>
+          </div>
+          <div className="flex items-center gap-1 rounded-full bg-card/90 px-3 py-2 shadow-md" title="Tiptoe specials left">
+            {[0, 1].map((i) => (
+              <IconStarFilled key={i} className={i < charges ? "size-5 text-primary" : "size-5 text-muted-foreground/30"} />
+            ))}
+          </div>
+        </div>
         {paused && status === "playing" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 text-center">
             <h2 className="text-5xl font-black text-white drop-shadow">Paused</h2>
