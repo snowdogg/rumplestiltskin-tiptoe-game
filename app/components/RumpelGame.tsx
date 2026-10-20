@@ -875,33 +875,30 @@ export function RumpelGame() {
   const [hp, setHp] = useState(MAX_HP);
   const [charges, setCharges] = useState(2);
   const [status, setStatus] = useState<Status>("playing");
-  const [musicOn, setMusicOn] = useState(false);
+  const [musicOn, setMusicOn] = useState(true);
   const [trackMissing, setTrackMissing] = useState(false);
   const [trackSrc, setTrackSrc] = useState(TRACK_SRC);
-  const musicWanted = useRef(true);
 
-  const startMusic = useCallback(() => {
+  const playSpecial = useCallback(() => {
     const a = audioRef.current;
-    if (!a || !musicWanted.current || !a.paused) return;
-    a.volume = 0.8;
-    a.play()
-      .then(() => setMusicOn(true))
-      .catch(() => {});
+    if (!a) return;
+    a.currentTime = 0;
+    a.volume = 0.9;
+    a.play().catch(() => {});
+  }, []);
+
+  const stopSpecial = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
   }, []);
 
   const toggleMusic = () => {
     const a = audioRef.current;
     if (!a) return;
-    if (a.paused) {
-      musicWanted.current = true;
-      a.play()
-        .then(() => setMusicOn(true))
-        .catch(() => {});
-    } else {
-      musicWanted.current = false;
-      a.pause();
-      setMusicOn(false);
-    }
+    a.muted = !a.muted;
+    setMusicOn(!a.muted);
   };
 
   useEffect(() => {
@@ -978,6 +975,7 @@ export function RumpelGame() {
     const dance = () => {
       if (state !== "playing" || chargesNow <= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
       chargesNow--;
+      playSpecial();
       hero.danceT = DANCE_TIME;
       hero.inv = DANCE_TIME + 0.3;
       hero.kickT = -1;
@@ -987,6 +985,7 @@ export function RumpelGame() {
       sync();
     };
     const restart = () => {
+      stopSpecial();
       piles = makePiles();
       enemies = makeEnemies();
       particles = [];
@@ -1014,7 +1013,6 @@ export function RumpelGame() {
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       const k = e.key.toLowerCase();
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
-      startMusic();
       if (k === " ") {
         if (!e.repeat) spin();
       } else if (k === "e") {
@@ -1030,7 +1028,6 @@ export function RumpelGame() {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
-    window.addEventListener("pointerdown", startMusic, { once: true });
 
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -1070,6 +1067,7 @@ export function RumpelGame() {
       if (dancing) {
         hero.danceT = Math.max(0, hero.danceT - dt);
         if (hero.danceT === 0) {
+          stopSpecial();
           enemies.forEach((e) => {
             if (e.frozen && e.state !== "dead") {
               e.frozen = false;
@@ -1289,22 +1287,18 @@ export function RumpelGame() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
-      window.removeEventListener("pointerdown", startMusic);
     };
-  }, [startMusic]);
+  }, [playSpecial, stopSpecial]);
 
   const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setTrackMissing(false);
     setTrackSrc(URL.createObjectURL(f));
-    musicWanted.current = true;
-    setTimeout(startMusic, 50);
   };
 
   const press = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.blur();
-    startMusic();
     fn();
   };
 
@@ -1347,7 +1341,7 @@ export function RumpelGame() {
           <Button size="icon" variant="outline" className="rounded-full" onClick={press(() => actionsRef.current.restart())} aria-label="Restart">
             <IconRefresh className="size-5" />
           </Button>
-          <Button size="icon" variant="outline" className="rounded-full" onClick={press(toggleMusic)} aria-label="Toggle music">
+          <Button size="icon" variant="outline" className="rounded-full" onClick={press(toggleMusic)} aria-label="Toggle song sound">
             {musicOn ? <IconMusic className="size-5" /> : <IconMusicOff className="size-5" />}
           </Button>
         </div>
@@ -1389,11 +1383,8 @@ export function RumpelGame() {
       <audio
         ref={audioRef}
         src={trackSrc}
-        loop
         preload="auto"
         onError={() => setTrackMissing(true)}
-        onPlay={() => setMusicOn(true)}
-        onPause={() => setMusicOn(false)}
       />
     </div>
   );
