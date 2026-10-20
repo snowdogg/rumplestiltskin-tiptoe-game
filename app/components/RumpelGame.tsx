@@ -3,6 +3,7 @@ import {
   IconCoin,
   IconMusic,
   IconMusicOff,
+  IconDroplet,
   IconRefresh,
   IconRotate360,
   IconUpload,
@@ -38,7 +39,7 @@ type Particle = {
   vy: number;
   life: number;
   max: number;
-  kind: "spark" | "coin" | "heart";
+  kind: "spark" | "coin" | "heart" | "blood";
 };
 
 const PILE_POSITIONS: [number, number][] = Array.from({ length: 16 }, (_, i) => [
@@ -2926,6 +2927,8 @@ export function RumpelGame() {
   const [charges, setCharges] = useState(2);
   const [status, setStatus] = useState<Status>("playing");
   const [musicOn, setMusicOn] = useState(true);
+  const [bloodOn, setBloodOn] = useState(true);
+  const bloodRef = useRef(true);
   const [trackMissing, setTrackMissing] = useState(false);
   const [trackSrc, setTrackSrc] = useState(TRACK_SRC);
 
@@ -2943,6 +2946,11 @@ export function RumpelGame() {
     a.pause();
     a.currentTime = 0;
   }, []);
+
+  const toggleBlood = () => {
+    bloodRef.current = !bloodRef.current;
+    setBloodOn(bloodRef.current);
+  };
 
   const toggleMusic = () => {
     const a = audioRef.current;
@@ -3032,6 +3040,23 @@ export function RumpelGame() {
       }
     };
 
+    const splat = (x: number, y: number, n = 10) => {
+      if (!bloodRef.current) return;
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 40 + Math.random() * 150;
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(a) * s,
+          vy: Math.sin(a) * s - 110,
+          life: 0,
+          max: 0.6 + Math.random() * 0.6,
+          kind: "blood",
+        });
+      }
+    };
+
     const damageEnemy = (e: Enemy, dmg: number, dir: number) => {
       e.hp -= dmg;
       e.vx = dir * 280;
@@ -3039,6 +3064,7 @@ export function RumpelGame() {
       e.state = e.hp <= 0 ? "dead" : "hurt";
       if (e.hp <= 0 && level === 3 && Math.random() < 0.25) ammoDrops.push({ x: e.x, y: e.y });
       burst(e.x, e.y - 40, 6, "spark");
+      splat(e.x, e.y - 50, e.hp <= 0 ? 22 : 10);
     };
 
     const live = (e: Enemy) => e.state !== "idle" && e.state !== "dead";
@@ -3055,6 +3081,7 @@ export function RumpelGame() {
       hero.inv = 0.9;
       hero.x += dir * 24;
       burst(hero.x, hero.y - 60, 8, "spark");
+      splat(hero.x, hero.y - 70, hpNow <= 0 ? 26 : 10);
       if (hpNow <= 0) {
         hpNow = 0;
         state = "lost";
@@ -3070,6 +3097,7 @@ export function RumpelGame() {
       b.invT = 0.25;
       b.hurtT = 0.2;
       burst(b.x, b.y - 100, 8, "spark");
+      splat(b.x, b.y - 110, 12);
       if (b.hp <= 0) {
         b.hp = 0;
         b.state = "dying";
@@ -3671,6 +3699,7 @@ export function RumpelGame() {
               hero.inv = 0.9;
               hero.x += e.face * 24;
               burst(hero.x, hero.y - 60, 8, "spark");
+              splat(hero.x, hero.y - 70, 10);
               if (hpNow <= 0) {
                 hpNow = 0;
                 state = "lost";
@@ -4069,6 +4098,11 @@ export function RumpelGame() {
           ctx.textAlign = "center";
           ctx.fillText("\u2665", p.x, p.y);
           ctx.globalAlpha = 1;
+        } else if (p.kind === "blood") {
+          ctx.fillStyle = `rgba(150,8,16,${Math.min(1, a * 1.6)})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2 + a * 2.5, 0, Math.PI * 2);
+          ctx.fill();
         } else {
           ctx.fillStyle = `rgba(255,236,120,${a})`;
           ctx.beginPath();
@@ -4262,6 +4296,9 @@ export function RumpelGame() {
           </Button>
           <Button size="icon" variant="outline" className="rounded-full" onClick={press(toggleMusic)} aria-label="Toggle song sound">
             {musicOn ? <IconMusic className="size-5" /> : <IconMusicOff className="size-5" />}
+          </Button>
+          <Button size="icon" variant={bloodOn ? "default" : "outline"} className="rounded-full" onClick={press(toggleBlood)} aria-label={bloodOn ? "Turn blood off" : "Turn blood on"} title={bloodOn ? "Blood: on" : "Blood: off"}>
+            <IconDroplet className="size-5" />
           </Button>
         </div>
       </div>
