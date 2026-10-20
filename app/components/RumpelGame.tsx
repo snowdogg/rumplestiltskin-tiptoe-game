@@ -7,11 +7,9 @@ import {
   IconRotate360,
   IconUpload,
   IconMoodCrazyHappy,
-  IconHeart,
   IconPlayerPause,
   IconPlayerPlay,
   IconKarate,
-  IconStarFilled,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 
@@ -1346,6 +1344,26 @@ const makeEnemies = (level = 1): Enemy[] => {
   return [...makeThugs(level), ...rats].sort((a, b) => a.x - b.x);
 };
 
+const HEART_PIXELS = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"];
+const STAR_PIXELS = ["0001000", "0001000", "1111111", "0111110", "0011100", "0110110", "1100011"];
+
+function PixelIcon({ rows, color }: { rows: string[]; color: string }) {
+  return (
+    <svg
+      width={rows[0].length * 2}
+      height={rows.length * 2}
+      viewBox={`0 0 ${rows[0].length} ${rows.length}`}
+      shapeRendering="crispEdges"
+      className="block"
+      style={{ imageRendering: "pixelated" }}
+    >
+      {rows.flatMap((row, y) =>
+        row.split("").map((c, x) => (c === "1" ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={color} /> : null)),
+      )}
+    </svg>
+  );
+}
+
 type Status = "playing" | "won" | "lost";
 
 export function RumpelGame() {
@@ -2158,16 +2176,22 @@ export function RumpelGame() {
 
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
-        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-card/90 px-3 py-2 shadow-md">
-            <IconHeart className="size-5 text-secondary" stroke={2.5} />
-            <div className="h-3.5 w-32 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-secondary transition-all" style={{ width: `${hp}%` }} />
+        <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 font-mono text-[10px] font-bold uppercase leading-none text-white">
+          <div className="flex items-center gap-1.5 border-2 border-black bg-[#1a1020]/90 px-1.5 py-1 shadow-[2px_2px_0_#000]">
+            <PixelIcon rows={HEART_PIXELS} color="#ff4d6d" />
+            <div className="flex gap-px border border-black bg-black p-px" title="Health">
+              {Array.from({ length: 10 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-2 w-2"
+                  style={{ background: hp > i * 10 ? (hp <= 30 ? "#ff3b3b" : "#4cff6a") : "#3a2a3f" }}
+                />
+              ))}
             </div>
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-card/90 px-3 py-2 shadow-md" title="Tiptoe specials left">
+          <div className="flex items-center gap-1 border-2 border-black bg-[#1a1020]/90 px-1.5 py-1 shadow-[2px_2px_0_#000]" title="Tiptoe specials left">
             {[0, 1].map((i) => (
-              <IconStarFilled key={i} className={i < charges ? "size-5 text-primary" : "size-5 text-muted-foreground/30"} />
+              <PixelIcon key={i} rows={STAR_PIXELS} color={i < charges ? "#ffd23f" : "#4a3a50"} />
             ))}
           </div>
         </div>
