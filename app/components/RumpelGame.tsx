@@ -4390,9 +4390,14 @@ export function RumpelGame() {
 
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
-        <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-base font-extrabold text-primary-foreground shadow-md">
-          <IconCoin className="size-5" stroke={2.5} />
-          <span>{coins}</span>
+        <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 border-2 border-black bg-[#1a1020]/90 px-1.5 py-1 font-mono text-[11px] font-bold leading-none text-[#ffd84a] shadow-[2px_2px_0_#000]">
+          <svg width="14" height="14" viewBox="0 0 7 7" shapeRendering="crispEdges" aria-hidden="true">
+            <path d="M2 0h3v1h1v1h1v3h-1v1h-1v1H2V6H1V5H0V2h1V1h1z" fill="#000" />
+            <path d="M2 1h3v1h1v3H5v1H2V5H1V2h1z" fill="#ffd84a" />
+            <path d="M2 1h2v1H3v2H2z" fill="#fff6b0" />
+            <path d="M4 3h1v2H4z" fill="#d89a1a" />
+          </svg>
+          <span className="tabular-nums tracking-wider">{String(coins).padStart(4, "0")}</span>
         </div>
         <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 font-mono text-[10px] font-bold uppercase leading-none text-white">
           <div className="flex items-center gap-1.5 border-2 border-black bg-[#1a1020]/90 px-1.5 py-1 shadow-[2px_2px_0_#000]">
