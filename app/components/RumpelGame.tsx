@@ -20,6 +20,35 @@ const W = 960;
 const H = 540;
 const FLOOR_TOP = 335;
 const FLOOR_BOTTOM = 510;
+const SFX = {
+  hit: { file: "VideoGameBeeps_S08TE.1330.wav", vol: 0.5, ms: 260 },
+  kick: { file: "VideoGameBlips_S08TE.1293.wav", vol: 0.3, ms: 180 },
+  spin: { file: "VideoGameAscend_S08TE.1287.wav", vol: 0.35, ms: 700 },
+  gold: { file: "VideoGameChime_S08TE.1294.wav", vol: 0.5, ms: 900 },
+  shoot: { file: "VideoGameBeeps_S08TE.1327.wav", vol: 0.25, ms: 90 },
+  pickup: { file: "VideoGameConsole_S08TE.1296.wav", vol: 0.45, ms: 700 },
+  hurt: { file: "VideoGameDescend_S08TE.1300.wav", vol: 0.4, ms: 350 },
+  death: { file: "VideoGameDescend_S011TE.100.wav", vol: 0.6, ms: 900 },
+  bossDown: { file: "VideoGameArpeggio_S08TE.1_2.wav", vol: 0.6, ms: 800 },
+  win: { file: "VideoGameArpeggio_S08TE.1_3.wav", vol: 0.55, ms: 1500 },
+} as const;
+
+const sfxCache: Record<string, HTMLAudioElement> = {};
+const sfxLast: Record<string, number> = {};
+
+function playSfx(name: keyof typeof SFX, minGap = 40) {
+  if (typeof Audio === "undefined") return;
+  const now = performance.now();
+  if (now - (sfxLast[name] ?? 0) < minGap) return;
+  sfxLast[name] = now;
+  const s = SFX[name];
+  const base = (sfxCache[s.file] ??= new Audio(`/sounds/${s.file}`));
+  const a = base.cloneNode() as HTMLAudioElement;
+  a.volume = s.vol;
+  a.play().catch(() => {});
+  setTimeout(() => a.pause(), s.ms);
+}
+
 const SPEED = 230;
 const SPIN_TIME = 0.85;
 const SPIN_RADIUS = 190;
@@ -3065,6 +3094,7 @@ export function RumpelGame() {
       if (e.hp <= 0 && level === 3 && Math.random() < 0.25) ammoDrops.push({ x: e.x, y: e.y });
       burst(e.x, e.y - 40, 6, "spark");
       splat(e.x, e.y - 50, e.hp <= 0 ? 22 : 10);
+      playSfx("hit");
     };
 
     const live = (e: Enemy) => e.state !== "idle" && e.state !== "dead";
@@ -3082,6 +3112,7 @@ export function RumpelGame() {
       hero.x += dir * 24;
       burst(hero.x, hero.y - 60, 8, "spark");
       splat(hero.x, hero.y - 70, hpNow <= 0 ? 26 : 10);
+      playSfx(hpNow <= 0 ? "death" : "hurt");
       if (hpNow <= 0) {
         hpNow = 0;
         state = "lost";
@@ -3098,8 +3129,10 @@ export function RumpelGame() {
       b.hurtT = 0.2;
       burst(b.x, b.y - 100, 8, "spark");
       splat(b.x, b.y - 110, 12);
+      playSfx("hit");
       if (b.hp <= 0) {
         b.hp = 0;
+        playSfx("bossDown");
         b.state = "dying";
         b.t = 0;
         b.air = 0;
@@ -3329,11 +3362,13 @@ export function RumpelGame() {
       if (state !== "playing" || hero.spinT >= 0 || hero.danceT > 0) return;
       hero.spinT = 0;
       converted = false;
+      playSfx("spin");
     };
     const kick = () => {
       if (state !== "playing" || hero.kickT >= 0 || hero.danceT > 0) return;
       hero.kickT = 0;
       kickHit = false;
+      playSfx("kick");
     };
     const dance = () => {
       if (state !== "playing" || chargesNow <= 0 || hero.spinT >= 0 || hero.danceT > 0) return;
@@ -3527,6 +3562,7 @@ export function RumpelGame() {
       if (gunCd > 0) gunCd -= dt;
       if (gunItem && !hasGun && pickupCd <= 0 && playing && Math.abs(hero.x - gunItem.x) < 46 && Math.abs(hero.y - gunItem.y) < 34) {
         hasGun = true;
+        playSfx("pickup");
         hero.armed = true;
         burst(gunItem.x, gunItem.y, 10, "spark");
         gunItem = null;
@@ -3542,6 +3578,7 @@ export function RumpelGame() {
       ammoDrops = ammoDrops.filter((d) => {
         if (playing && Math.abs(hero.x - d.x) < 40 && Math.abs(hero.y - d.y) < 30) {
           ammo += 25;
+          playSfx("pickup");
           burst(d.x, d.y, 8, "coin");
           sync();
           return false;
@@ -3553,6 +3590,7 @@ export function RumpelGame() {
         gunCd = 0.075;
         ammo--;
         hero.fireT = 0.06;
+        playSfx("shoot", 60);
         bullets.push({ x: hero.x + hero.face * 58, y: hero.y + (Math.random() - 0.5) * 8, vx: hero.face * 950, life: 0 });
         setAmmo(ammo);
       }
@@ -3624,6 +3662,7 @@ export function RumpelGame() {
             }
           });
           if (n > 0) {
+            playSfx("gold");
             happy = true;
             particles.push({ x: WOMAN.x, y: WOMAN.y - 140, vx: 0, vy: -50, life: 0, max: 1.4, kind: "heart" });
           }
@@ -3700,6 +3739,7 @@ export function RumpelGame() {
               hero.x += e.face * 24;
               burst(hero.x, hero.y - 60, 8, "spark");
               splat(hero.x, hero.y - 70, 10);
+              playSfx(hpNow <= 0 ? "death" : "hurt");
               if (hpNow <= 0) {
                 hpNow = 0;
                 state = "lost";
@@ -3788,6 +3828,7 @@ export function RumpelGame() {
 
       if (state === "playing" && hero.x > WOMAN.x - 120 && !(boss && boss.state !== "dead")) {
         state = "won";
+        playSfx("win");
         happy = true;
         for (let k = 0; k < 8; k++) {
           particles.push({
