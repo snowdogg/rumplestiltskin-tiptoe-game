@@ -159,6 +159,131 @@ function drawBarnTile(ctx: CanvasRenderingContext2D, time: number) {
   }
 }
 
+function drawForest(ctx: CanvasRenderingContext2D, time: number, cam: number) {
+  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_TOP + 20);
+  sky.addColorStop(0, "#060914");
+  sky.addColorStop(1, "#13232a");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, FLOOR_TOP + 20);
+
+  const glow = ctx.createRadialGradient(740, 90, 10, 740, 90, 160);
+  glow.addColorStop(0, "rgba(190,210,255,0.35)");
+  glow.addColorStop(1, "rgba(190,210,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(540, 0, 400, 260);
+  ctx.fillStyle = "#dfe8ff";
+  ctx.beginPath();
+  ctx.arc(740, 90, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(120,140,190,0.35)";
+  ctx.beginPath();
+  ctx.arc(728, 82, 8, 0, Math.PI * 2);
+  ctx.arc(752, 104, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // far pines
+  const far = 0.25;
+  const f0 = Math.floor((cam * far) / 120) - 1;
+  ctx.fillStyle = "#0a1519";
+  for (let i = f0; i < f0 + 10; i++) {
+    const x = i * 120 - cam * far;
+    const h = 150 + (Math.abs(i * 37) % 5) * 26;
+    for (let t = 0; t < 4; t++) {
+      const ty = FLOOR_TOP + 20 - h + t * (h / 4.5);
+      const half = 20 + t * 14;
+      ctx.beginPath();
+      ctx.moveTo(x, ty - 30);
+      ctx.lineTo(x - half, ty + 40);
+      ctx.lineTo(x + half, ty + 40);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // fog band
+  const fog = ctx.createLinearGradient(0, 230, 0, FLOOR_TOP + 30);
+  fog.addColorStop(0, "rgba(150,190,200,0)");
+  fog.addColorStop(1, `rgba(150,190,200,${0.16 + Math.sin(time * 0.6) * 0.04})`);
+  ctx.fillStyle = fog;
+  ctx.fillRect(0, 230, W, FLOOR_TOP - 200);
+
+  // near gnarled trunks
+  const near = 0.6;
+  const n0 = Math.floor((cam * near) / 280) - 1;
+  for (let i = n0; i < n0 + 6; i++) {
+    const x = i * 280 + (Math.abs(i * 91) % 90) - cam * near;
+    const w = 34 + (Math.abs(i * 13) % 20);
+    ctx.fillStyle = "#050c0b";
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 - 8, FLOOR_TOP + 40);
+    ctx.quadraticCurveTo(x - w / 2, 200, x - w / 2 + 4, -10);
+    ctx.lineTo(x + w / 2 - 4, -10);
+    ctx.quadraticCurveTo(x + w / 2, 200, x + w / 2 + 8, FLOOR_TOP + 40);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#050c0b";
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(x, 150);
+    ctx.quadraticCurveTo(x + 50, 110, x + 90, 120);
+    ctx.moveTo(x, 80);
+    ctx.quadraticCurveTo(x - 50, 50, x - 90, 62);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(170,230,200,0.5)";
+    ctx.beginPath();
+    ctx.arc(x - 6, 250 + (i % 3) * 20, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ground
+  const ground = ctx.createLinearGradient(0, FLOOR_TOP + 20, 0, H);
+  ground.addColorStop(0, "#17261d");
+  ground.addColorStop(1, "#0a130e");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, FLOOR_TOP + 20, W, H);
+  ctx.strokeStyle = "rgba(60,110,70,0.6)";
+  ctx.lineWidth = 2;
+  const g0 = Math.floor(cam / 47);
+  for (let k = g0; k < g0 + 22; k++) {
+    const x = k * 47 - cam;
+    const y = FLOOR_TOP + 35 + (Math.abs(k * 53) % 150);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 4, y - 12);
+    ctx.moveTo(x + 4, y);
+    ctx.lineTo(x + 8, y - 10);
+    ctx.stroke();
+    if (k % 7 === 0) {
+      ctx.fillStyle = "rgba(90,255,200,0.85)";
+      ctx.beginPath();
+      ctx.arc(x + 14, y - 3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(90,255,200,0.15)";
+      ctx.beginPath();
+      ctx.arc(x + 14, y - 3, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // fireflies
+  for (let k = 0; k < 26; k++) {
+    const fx = (k * 181 + Math.sin(time * 0.5 + k) * 30 - cam * 0.8) % W;
+    const x = fx < 0 ? fx + W : fx;
+    const y = 100 + ((k * 67) % 330) + Math.cos(time * 0.7 + k) * 14;
+    const a = 0.3 + 0.7 * Math.abs(Math.sin(time * 1.5 + k * 2));
+    ctx.fillStyle = `rgba(210,255,140,${a})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const vig = ctx.createRadialGradient(W / 2, H / 2, 260, W / 2, H / 2, 620);
+  vig.addColorStop(0, "rgba(0,0,0,0)");
+  vig.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+}
+
 function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   ctx.fillStyle = "#ffd23f";
   ctx.strokeStyle = "#b8860b";
@@ -840,11 +965,11 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
 }
 
 
-const makeEnemies = (): Enemy[] =>
-  Array.from({ length: 11 }, (_, i) => {
-    const brute = i % 4 === 3;
+const makeEnemies = (level = 1): Enemy[] =>
+  Array.from({ length: level === 1 ? 11 : 15 }, (_, i) => {
+    const brute = level === 1 ? i % 4 === 3 : i % 3 === 2;
     return {
-      x: 950 + i * 240 + (i % 2) * 40,
+      x: 950 + i * (level === 1 ? 240 : 190) + (i % 2) * 40,
       y: [400, 470, 360, 500, 430][i % 5],
       kind: brute ? "brute" : "goon",
       hp: brute ? 6 : 3,
@@ -870,7 +995,10 @@ export function RumpelGame() {
     dance: () => {},
     kick: () => {},
     restart: () => {},
+    retry: () => {},
   });
+  const [level, setLevel] = useState(1);
+  const [countdown, setCountdown] = useState(5);
   const [coins, setCoins] = useState(0);
   const [hp, setHp] = useState(MAX_HP);
   const [charges, setCharges] = useState(2);
@@ -917,7 +1045,12 @@ export function RumpelGame() {
       inv: 0,
     };
     let piles = makePiles();
-    let enemies = makeEnemies();
+    let enemies = makeEnemies(1);
+    let level = 1;
+    let coinBase = 0;
+    let transT = 0;
+    let bannerT = 3;
+    let lastCount = -1;
     let particles: Particle[] = [];
     let cam = 0;
     let hpNow = MAX_HP;
@@ -984,29 +1117,35 @@ export function RumpelGame() {
       });
       sync();
     };
-    const restart = () => {
+    const loadLevel = (n: number) => {
       stopSpecial();
+      level = n;
       piles = makePiles();
-      enemies = makeEnemies();
+      enemies = makeEnemies(n);
       particles = [];
-      Object.assign(hero, {
-        x: 120,
-        y: 440,
-        face: 1,
-        danceT: 0,
-        spinT: -1,
-        kickT: -1,
-        inv: 0,
-      });
+      Object.assign(hero, { x: 120, y: 440, face: 1, danceT: 0, spinT: -1, kickT: -1, inv: 0 });
       cam = 0;
-      hpNow = MAX_HP;
-      chargesNow = 2;
       state = "playing";
       happy = false;
-      setCoins(0);
+      bannerT = 3;
+      transT = 0;
+      lastCount = -1;
+      setLevel(n);
+      setCoins(coinBase);
       sync();
     };
-    actionsRef.current = { spin, dance, kick, restart };
+    const restart = () => {
+      coinBase = 0;
+      hpNow = MAX_HP;
+      chargesNow = 2;
+      loadLevel(1);
+    };
+    const retry = () => {
+      hpNow = MAX_HP;
+      chargesNow = 2;
+      loadLevel(level);
+    };
+    actionsRef.current = { spin, dance, kick, restart, retry };
 
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -1125,7 +1264,7 @@ export function RumpelGame() {
             happy = true;
             particles.push({ x: WOMAN.x, y: WOMAN.y - 140, vx: 0, vy: -50, life: 0, max: 1.4, kind: "heart" });
           }
-          setCoins(piles.filter((p) => p.gold).length * COINS_PER_PILE);
+          setCoins(coinBase + piles.filter((p) => p.gold).length * COINS_PER_PILE);
         }
         if (hero.spinT >= SPIN_TIME) hero.spinT = -1;
       }
@@ -1200,7 +1339,23 @@ export function RumpelGame() {
             kind: "heart",
           });
         }
+        if (level === 1) transT = 5;
         sync();
+      }
+
+      if (state === "won" && level === 1) {
+        transT -= dt;
+        const c = Math.max(0, Math.ceil(transT));
+        if (c !== lastCount) {
+          lastCount = c;
+          setCountdown(c);
+        }
+        if (transT <= 0) {
+          coinBase += piles.filter((p) => p.gold).length * COINS_PER_PILE;
+          hpNow = Math.min(MAX_HP, hpNow + 40);
+          chargesNow = 2;
+          loadLevel(2);
+        }
       }
 
       const target = Math.min(WORLD_W - W, Math.max(0, hero.x - 380));
@@ -1214,7 +1369,8 @@ export function RumpelGame() {
       });
       particles = particles.filter((p) => p.life < p.max);
 
-      drawBarn(ctx, time, cam);
+      if (level === 1) drawBarn(ctx, time, cam);
+      else drawForest(ctx, time, cam);
       ctx.save();
       ctx.translate(-cam, 0);
       type Item = { y: number; draw: () => void };
@@ -1267,6 +1423,20 @@ export function RumpelGame() {
         ctx.fillText("TIP TOE SPECIAL!", W / 2, 90);
       }
 
+      if (bannerT > 0 && state === "playing") {
+        bannerT -= dt;
+        ctx.globalAlpha = Math.min(1, bannerT);
+        ctx.font = "900 48px sans-serif";
+        ctx.textAlign = "center";
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = "#1a0f08";
+        ctx.fillStyle = "#ffd23f";
+        const title = level === 1 ? "LEVEL 1 \u00b7 THE BARN" : "LEVEL 2 \u00b7 THE DARK FOREST";
+        ctx.strokeText(title, W / 2, 200);
+        ctx.fillText(title, W / 2, 200);
+        ctx.globalAlpha = 1;
+      }
+
       const threats = enemies.some((e) => live(e) && onScreen(e)) || enemies.some((e) => e.state === "idle" && e.x < cam + W);
       if (state === "playing" && !threats && cam < WORLD_W - W - 5 && Math.floor(time * 2) % 2 === 0) {
         ctx.font = "900 46px sans-serif";
@@ -1310,6 +1480,7 @@ export function RumpelGame() {
             <IconCoin className="size-6" stroke={2.5} />
             <span>{coins}</span>
           </div>
+          <div className="rounded-full bg-card px-4 py-2 text-sm font-extrabold shadow-md">Level {level}</div>
           <div className="flex items-center gap-2 rounded-full bg-card px-3 py-2 shadow-md">
             <IconHeart className="size-5 text-secondary" stroke={2.5} />
             <div className="h-3.5 w-32 overflow-hidden rounded-full bg-muted">
@@ -1350,16 +1521,27 @@ export function RumpelGame() {
       <div className="relative overflow-hidden rounded-[2rem] border-4 border-primary/60 bg-card shadow-xl">
         <canvas ref={canvasRef} width={W} height={H} className="block h-auto w-full" />
         {status !== "playing" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 px-4 text-center">
             <h2 className="text-4xl font-black text-white drop-shadow sm:text-5xl">
-              {status === "won" ? "She kisses him. Prince!" : "Knocked out!"}
+              {status === "lost" ? "Knocked out!" : "She kisses him. Prince!"}
             </h2>
             <p className="text-lg text-white/90">
-              {status === "won" ? `You reached her with ${coins} gold.` : "Those goblins play rough."}
+              {status === "lost"
+                ? "Those goblins play rough."
+                : level === 1
+                  ? `Whisked away to the Dark Forest in ${countdown}...`
+                  : `The forest is tamed. ${coins} gold in the bag.`}
             </p>
-            <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.restart())}>
-              {status === "won" ? "Play again" : "Try again"}
-            </Button>
+            {status === "lost" && (
+              <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.retry())}>
+                Try again
+              </Button>
+            )}
+            {status === "won" && level === 2 && (
+              <Button size="lg" className="rounded-full font-bold" onClick={press(() => actionsRef.current.restart())}>
+                Play again
+              </Button>
+            )}
           </div>
         )}
       </div>
