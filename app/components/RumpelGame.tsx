@@ -326,14 +326,16 @@ type Enemy = {
   spd: number;
 };
 
-function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy) {
+function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy, time: number) {
   const brute = e.kind === "brute";
   const sc = brute ? 1.3 : 1;
-  const vest = brute ? "#5b2a3c" : "#4a3a22";
-  const skin = brute ? "#8a6fa8" : "#7fb04a";
+  const skin = brute ? "#7d8268" : "#cdb8c8";
+  const skinDark = brute ? "#4f5340" : "#8e7488";
+  const robe = brute ? "#1d1a1c" : "#26252b";
+  const robeHi = brute ? "#3a3538" : "#47454f";
   ctx.save();
   ctx.translate(e.x, e.y);
-  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();
   ctx.ellipse(0, 3, 28 * sc, 8 * sc, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -346,99 +348,224 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy) {
     ctx.rotate(-0.15);
   }
   const sw = e.state === "walk" ? Math.sin(e.phase) : 0;
+  const breathe = Math.sin(time * 2 + e.phase) * 1.2;
+  const hunch = brute ? 8 : 0;
   ctx.lineCap = "round";
-  ctx.strokeStyle = "#1d1a14";
-  ctx.lineWidth = 9;
-  [-7, 7].forEach((lx, i) => {
-    const off = sw * 8 * (i ? 1 : -1);
+  ctx.lineJoin = "round";
+
+  // thin legs and shoes
+  ctx.strokeStyle = "#0d0c10";
+  ctx.lineWidth = brute ? 9 : 6;
+  [-6, 6].forEach((lx, i) => {
+    const off = sw * 9 * (i ? 1 : -1);
     ctx.beginPath();
-    ctx.moveTo(lx, -32);
-    ctx.lineTo(lx + off, -6);
+    ctx.moveTo(lx, -38);
+    ctx.lineTo(lx + off, -5);
     ctx.stroke();
-    ctx.fillStyle = "#0e0d09";
+    ctx.fillStyle = "#08070a";
     ctx.beginPath();
-    ctx.ellipse(lx + off + 4, -4, 10, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(lx + off + 5, -3, 11, 4, 0, 0, Math.PI * 2);
     ctx.fill();
   });
-  const arm = (side: number, hx: number, hy: number) => {
-    ctx.strokeStyle = vest;
-    ctx.lineWidth = 10;
-    ctx.beginPath();
-    ctx.moveTo(side * 18, -72);
-    ctx.lineTo(hx, hy);
-    ctx.stroke();
+
+  const hand = (hx: number, hy: number) => {
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+    ctx.ellipse(hx, hy, 5, 7, 0.3, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = skin;
+    ctx.lineWidth = 2;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(hx + k * 3, hy + 4);
+      ctx.lineTo(hx + k * 4 + 2, hy + 15);
+      ctx.stroke();
+    }
   };
-  arm(-1, -24 + sw * 6, -44);
-  ctx.fillStyle = vest;
+  const arm = (hx: number, hy: number, back: boolean) => {
+    const sx = back ? -10 : 12;
+    ctx.strokeStyle = back ? "#17161a" : robe;
+    ctx.lineWidth = brute ? 11 : 8;
+    ctx.beginPath();
+    ctx.moveTo(sx, -84 + hunch);
+    ctx.quadraticCurveTo((sx + hx) / 2 + (back ? -8 : 8), (-84 + hy) / 2 + 12, hx, hy);
+    ctx.stroke();
+    hand(hx, hy);
+  };
+  arm(-22 + sw * 6, -42, true);
+
+  // robe with high collar and tattered hem
+  ctx.fillStyle = robe;
   ctx.beginPath();
-  ctx.moveTo(-20, -76);
-  ctx.lineTo(20, -76);
-  ctx.lineTo(22, -30);
-  ctx.lineTo(-22, -30);
+  ctx.moveTo(-17, -90 + hunch);
+  ctx.lineTo(17, -90 + hunch);
+  ctx.lineTo(brute ? 28 : 22, -20);
+  for (let k = 0; k < 6; k++) {
+    const x = (brute ? 28 : 22) - k * ((brute ? 56 : 44) / 6);
+    ctx.lineTo(x - 4, -14 - (k % 2) * 8);
+  }
+  ctx.lineTo(brute ? -28 : -22, -20);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "#1d1a14";
-  ctx.fillRect(-22, -38, 44, 6);
-  ctx.fillStyle = "#d9b13a";
-  ctx.fillRect(-4, -39, 8, 8);
-  if (e.state === "wind") {
-    const p = Math.min(1, e.t / 0.4);
-    if (p < 0.75) arm(1, 20, -104 + p * 10);
-    else arm(1, 56, -62);
-  } else {
-    arm(1, 24 - sw * 6, -44);
+  ctx.strokeStyle = robeHi;
+  ctx.lineWidth = 1.5;
+  for (let k = 0; k < 5; k++) {
+    ctx.beginPath();
+    ctx.moveTo(-12 + k * 6, -80 + hunch);
+    ctx.lineTo(-14 + k * 7, -26);
+    ctx.stroke();
   }
-  ctx.fillStyle = skin;
+  ctx.fillStyle = "#111014";
   ctx.beginPath();
-  ctx.moveTo(-18, -92);
-  ctx.lineTo(-38, -100);
-  ctx.lineTo(-18, -80);
-  ctx.moveTo(18, -92);
-  ctx.lineTo(38, -100);
-  ctx.lineTo(18, -80);
+  ctx.moveTo(-6, -92 + hunch);
+  ctx.lineTo(0, -60);
+  ctx.lineTo(6, -92 + hunch);
   ctx.fill();
+  ctx.fillStyle = robe;
   ctx.beginPath();
-  ctx.arc(0, -88, 20, 0, Math.PI * 2);
+  ctx.moveTo(-18, -88 + hunch);
+  ctx.lineTo(-24, -106 + hunch);
+  ctx.lineTo(-6, -92 + hunch);
+  ctx.moveTo(18, -88 + hunch);
+  ctx.lineTo(24, -106 + hunch);
+  ctx.lineTo(6, -92 + hunch);
   ctx.fill();
-  ctx.fillStyle = brute ? "#2a2230" : "#b3322b";
+
+  // neck
+  ctx.fillStyle = skinDark;
+  ctx.fillRect(-4, -104 + hunch, 8, 18);
+
+  // head
+  ctx.save();
+  ctx.translate(brute ? 8 : 0, hunch ? -6 : 0);
+  ctx.rotate(Math.sin(time * 1.3 + e.phase) * 0.05 + (brute ? 0.12 : 0));
+  const hy0 = brute ? -100 : -122;
+  const rx = brute ? 19 : 14;
+  const ry = brute ? 21 : 24;
+  ctx.fillStyle = skinDark;
+  if (brute) {
+    // huge curved horn-like ears
+    [-1, 1].forEach((s) => {
+      ctx.beginPath();
+      ctx.moveTo(s * 15, hy0 + 2);
+      ctx.bezierCurveTo(s * 40, hy0 - 6, s * 52, hy0 - 24, s * 40, hy0 - 44);
+      ctx.bezierCurveTo(s * 38, hy0 - 26, s * 28, hy0 - 16, s * 14, hy0 - 12);
+      ctx.closePath();
+      ctx.fill();
+    });
+  } else {
+    [-1, 1].forEach((s) => {
+      ctx.beginPath();
+      ctx.moveTo(s * (rx - 2), hy0 + 4);
+      ctx.lineTo(s * (rx + 26), hy0 - 12);
+      ctx.lineTo(s * (rx - 1), hy0 - 6);
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.fillStyle = "#c9c9d6";
+    ctx.beginPath();
+    ctx.arc(rx - 1, hy0 + 10, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const g = ctx.createRadialGradient(-5, hy0 - 12, 2, 0, hy0, ry + 4);
+  g.addColorStop(0, brute ? "#a2a88a" : "#efe0ea");
+  g.addColorStop(1, skin);
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(0, -92, 21, Math.PI, 0);
+  ctx.ellipse(0, hy0, rx, ry, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillRect(-21, -94, 42, 5);
-  ctx.fillStyle = "#fff";
+  // hollow cheeks and sunken eyes
+  ctx.fillStyle = "rgba(70,40,65,0.45)";
   ctx.beginPath();
-  ctx.arc(-7, -88, 5, 0, Math.PI * 2);
-  ctx.arc(8, -88, 5, 0, Math.PI * 2);
+  ctx.ellipse(-8, hy0 + 4, 4, 9, 0.2, 0, Math.PI * 2);
+  ctx.ellipse(10, hy0 + 4, 4, 9, -0.2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#c01818";
+  ctx.fillStyle = "rgba(40,20,40,0.7)";
   ctx.beginPath();
-  ctx.arc(-6, -88, 2.4, 0, Math.PI * 2);
-  ctx.arc(9, -88, 2.4, 0, Math.PI * 2);
+  ctx.ellipse(-5, hy0 - 3, 6.5, 5.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(9, hy0 - 3, 6.5, 5.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "#1d1a14";
-  ctx.lineWidth = 2.5;
+  ctx.fillStyle = brute ? "#d9c96a" : "#d8d8e0";
   ctx.beginPath();
-  ctx.moveTo(-13, -97);
-  ctx.lineTo(-2, -91);
-  ctx.moveTo(14, -97);
-  ctx.lineTo(3, -91);
-  ctx.stroke();
-  ctx.strokeStyle = "#fff";
+  ctx.ellipse(-5, hy0 - 3, 3.6, 3.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(9, hy0 - 3, 3.6, 3.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#050305";
+  const look = Math.sin(time * 0.9 + e.phase) * 0.8;
+  ctx.beginPath();
+  ctx.arc(-4 + look + 1.5, hy0 - 3, 1.5, 0, Math.PI * 2);
+  ctx.arc(10 + look + 1.5, hy0 - 3, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  // brow, nose, mouth
+  ctx.strokeStyle = skinDark;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(-9, -77);
-  for (let k = 0; k < 6; k++) ctx.lineTo(-9 + k * 3.6 + 1.8, k % 2 ? -77 : -73);
+  ctx.moveTo(-11, hy0 - 10);
+  ctx.quadraticCurveTo(-4, hy0 - 13, 1, hy0 - 8);
+  ctx.moveTo(15, hy0 - 10);
+  ctx.quadraticCurveTo(9, hy0 - 13, 4, hy0 - 8);
   ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(3, hy0 - 4);
+  ctx.quadraticCurveTo(brute ? 12 : 7, hy0 + 8, brute ? 6 : 4, hy0 + 10);
+  ctx.stroke();
+  ctx.strokeStyle = "#3a1f33";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (brute) {
+    ctx.moveTo(-6, hy0 + 15);
+    ctx.quadraticCurveTo(3, hy0 + 20, 12, hy0 + 14);
+    ctx.stroke();
+    ctx.fillStyle = "#e4dcc0";
+    ctx.beginPath();
+    ctx.moveTo(-2, hy0 + 17);
+    ctx.lineTo(0, hy0 + 24);
+    ctx.lineTo(3, hy0 + 18);
+    ctx.moveTo(6, hy0 + 18);
+    ctx.lineTo(8, hy0 + 25);
+    ctx.lineTo(10, hy0 + 16);
+    ctx.fill();
+    ctx.strokeStyle = skinDark;
+    ctx.lineWidth = 1.2;
+    for (let k = 0; k < 5; k++) {
+      ctx.beginPath();
+      ctx.moveTo(-14, hy0 - 16 + k * 3);
+      ctx.lineTo(14, hy0 - 15 + k * 3);
+      ctx.stroke();
+    }
+  } else {
+    const open = e.state === "wind" ? 4 : 0;
+    ctx.moveTo(-3, hy0 + 14);
+    ctx.quadraticCurveTo(3, hy0 + 14 + open, 10, hy0 + 13);
+    ctx.stroke();
+    if (open) {
+      ctx.fillStyle = "#1a0a14";
+      ctx.beginPath();
+      ctx.ellipse(3.5, hy0 + 16, 5, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // sheen
+  ctx.fillStyle = "rgba(255,255,255,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(-4, hy0 - 18, 5, 3, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (e.state === "wind") {
+    const p = Math.min(1, e.t / 0.4);
+    if (p < 0.75) arm(22, -112 + p * 10 + breathe, false);
+    else arm(58, -64, false);
+  } else {
+    arm(26 - sw * 6, -42, false);
+  }
+
   if (e.frozen) {
     ctx.fillStyle = "rgba(170,230,255,0.4)";
     ctx.strokeStyle = "rgba(220,250,255,0.9)";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(-30, -116, 60, 120, 12);
+    ctx.roundRect(-32, -150, 64, 156, 12);
     ctx.fill();
     ctx.stroke();
   }
@@ -446,12 +573,11 @@ function drawEnemy(ctx: CanvasRenderingContext2D, e: Enemy) {
   if (e.hp < e.maxHp && e.state !== "dead") {
     const w = 46 * sc;
     ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(e.x - w / 2, e.y - 128 * sc, w, 6);
+    ctx.fillRect(e.x - w / 2, e.y - 160 * sc, w, 6);
     ctx.fillStyle = "#ff5252";
-    ctx.fillRect(e.x - w / 2, e.y - 128 * sc, (w * e.hp) / e.maxHp, 6);
+    ctx.fillRect(e.x - w / 2, e.y - 160 * sc, (w * e.hp) / e.maxHp, 6);
   }
 }
-
 
 function drawHero(ctx: CanvasRenderingContext2D, h: Hero, time0: number) {
   const dancing = h.danceT > 0;
@@ -1096,7 +1222,7 @@ export function RumpelGame() {
       type Item = { y: number; draw: () => void };
       const items: Item[] = [
         ...piles.map((p) => ({ y: p.y, draw: () => drawPile(ctx, p, time) })),
-        ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e) })),
+        ...enemies.map((e) => ({ y: e.y, draw: () => drawEnemy(ctx, e, time) })),
         { y: WOMAN.y, draw: () => drawWoman(ctx, happy, time) },
         { y: hero.y, draw: () => drawHero(ctx, hero, time) },
       ];
