@@ -339,8 +339,13 @@ function drawHero(ctx: CanvasRenderingContext2D, h: Hero) {
     ctx.lineTo(lx, -10 - lift);
     ctx.stroke();
     ctx.fillStyle = "#0d0c1a";
+    const sy = -5 - lift;
     ctx.beginPath();
-    ctx.ellipse(lx + 4, -5 - lift, 11, 5, -0.25, 0, Math.PI * 2);
+    ctx.moveTo(lx - 7, sy - 4);
+    ctx.quadraticCurveTo(lx + 6, sy - 6, lx + 38, sy - 13);
+    ctx.quadraticCurveTo(lx + 22, sy + 1, lx + 8, sy + 5);
+    ctx.lineTo(lx - 7, sy + 5);
+    ctx.closePath();
     ctx.fill();
   });
 
