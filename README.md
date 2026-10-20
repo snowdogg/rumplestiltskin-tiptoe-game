@@ -1,8 +1,6 @@
 # My App
 
-An app built with [Builder.io](https://www.builder.io) on the
-[Agent-Native](https://agent-native.com?utm_source=github&utm_medium=referral&utm_content=fusion-starter-readme) framework. Replace this paragraph with
-what the app does and who it's for.
+Streets of Rage type game based on the Rumplestiltskin Riff Raff viral video.
 
 ## Develop locally
 
